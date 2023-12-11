@@ -182,7 +182,7 @@ private:
 
         case Mode::convertedToFormat:
         {
-            editedImage = cachedImage.convertedToFormat(Image::SingleChannel);
+            editedImage = cachedImage.convertedToFormat(juce::Image::SingleChannel);
             break;
         }
 
