@@ -15,20 +15,38 @@ void ComparisonComponent::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);
 
-    if (redComparison.isNull() && softwareRendererSnapshot.isValid() && direct2DRendererSnapshot.isValid())
+    if (redComparison.isNull())
     {
         compare();
+		if (redComparison.getBounds().isEmpty())
+		{
+			return;
+		}
     }
 
-	//g.drawImageAt(alphaComparison, 0, 0);
-
-    juce::Image* images[] = { /*&softwareRendererSnapshot, &direct2DRendererSnapshot,*/ &redComparison, & greenComparison, & blueComparison, & alphaComparison};
+    juce::Image* images[] = { &redComparison, & greenComparison, & blueComparison, & alphaComparison};
+	juce::StatisticsAccumulator<double> * stats[] = { &redStats, &greenStats, &blueStats, &alphaStats };
     juce::Rectangle<int> r{ 0, 0, getWidth() / 2, getHeight() / 2 };
+	int index = 0;
     for (auto const & image : images)
     {
         if (image->isValid())
         {
             g.drawImageWithin(*image, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::RectanglePlacement::centred);
+
+			if (stats[index]->getCount() > 0)
+			{
+				juce::String text;
+				text << "Average: " << stats[index]->getAverage() << juce::newLine;
+				text << "Max: " << stats[index]->getMaxValue() << juce::newLine;
+				text << "Std.dev: " << stats[index]->getStandardDeviation() << juce::newLine;
+
+				g.setColour(juce::Colours::darkgrey);
+				g.fillRect(juce::Rectangle{ r.getX() + 40, r.getY() + 20, 200, 100 });
+
+				g.setColour(juce::Colours::white);
+				g.drawMultiLineText(text, r.getX() + 50, r.getY() + 35, r.getWidth(), juce::Justification::centredLeft);
+			}
         }
         else
         {
@@ -36,12 +54,15 @@ void ComparisonComponent::paint (juce::Graphics& g)
             g.drawText("Nope", r, juce::Justification::centred);
         }
 
+
         r.setX(r.getRight());
         if (r.getX() >= proportionOfWidth(0.75f))
         {
             r.setX(0);
             r.setY(r.getBottom());
         }
+
+		++index;
     }
 }
 
@@ -51,6 +72,11 @@ void ComparisonComponent::resized()
 
 void ComparisonComponent::compare()
 {
+	if (softwareRendererSnapshot.isNull() || direct2DRendererSnapshot.isNull())
+	{
+		return;
+	}
+
     redComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
     blueComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
     greenComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
@@ -77,6 +103,7 @@ void ComparisonComponent::compare()
 
 	            {
 	                auto deltaFloat = std::abs(c1.getFloatRed() - c2.getFloatRed());
+					redStats.addValue(deltaFloat);
 	                auto deltaInt = (uint8_t)(int)(scale * deltaFloat);
 	                juce::Colour c{ deltaInt, zero, zero, 1.0f };
 	                redData.setPixelColour(x, y, c);
@@ -84,6 +111,7 @@ void ComparisonComponent::compare()
 	
 	            {
 	                auto deltaFloat = std::abs(c1.getFloatGreen() - c2.getFloatGreen());
+					greenStats.addValue(deltaFloat);
 	                auto deltaInt = (uint8_t)(int)(scale * deltaFloat);
 	                juce::Colour c{ zero, deltaInt, zero, 1.0f };	            
 	                greenData.setPixelColour(x, y, c);
@@ -91,6 +119,7 @@ void ComparisonComponent::compare()
 	            
 	            {
 	                auto deltaFloat = std::abs(c1.getFloatBlue() - c2.getFloatBlue());
+					blueStats.addValue(deltaFloat);
 	                auto deltaInt = (uint8_t)(int)(scale * deltaFloat);
 	                juce::Colour c{ zero, zero, deltaInt, 1.0f };
 	                blueData.setPixelColour(x, y, c);

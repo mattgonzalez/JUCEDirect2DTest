@@ -13,7 +13,7 @@ public:
 
 private:
     juce::Random random;
-    juce::TextEditor editor;
+    juce::String text;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RenderTestComponent)
 };
