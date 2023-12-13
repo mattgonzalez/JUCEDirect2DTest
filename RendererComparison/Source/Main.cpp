@@ -1,6 +1,62 @@
 #include <JuceHeader.h>
-#include "RenderTestComponent.h"
-#include "ComparisonComponent.h"
+#include "ImageComparator.h"
+
+class TestWindow : public juce::DocumentWindow
+{
+public:
+    TestWindow(juce::String name, int renderer, int64_t seed)
+        : DocumentWindow(name,
+            juce::Colours::black,
+            juce::DocumentWindow::allButtons)
+    {
+        setUsingNativeTitleBar(true);
+        setContentOwned(new RenderTestComponent(seed), true);
+
+        setResizable(true, true);
+
+        getPeer()->setCurrentRenderingEngine(renderer);
+
+        setVisible(true);
+    }
+
+    void closeButtonPressed() override
+    {
+        juce::JUCEApplication::getInstance()->systemRequestedQuit();
+    }
+
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TestWindow)
+};
+
+class ComparisonWindow : public juce::DocumentWindow
+{
+public:
+    ComparisonWindow()
+        : DocumentWindow("Comparison",
+            juce::Desktop::getInstance().getDefaultLookAndFeel()
+            .findColour(juce::ResizableWindow::backgroundColourId),
+            DocumentWindow::allButtons)
+    {
+        setUsingNativeTitleBar(true);
+        setContentNonOwned(&comparisonComponent, false);
+
+        setResizable(true, true);
+
+        getPeer()->setCurrentRenderingEngine(0);
+
+        setVisible(true);
+    }
+
+    void closeButtonPressed() override
+    {
+        juce::JUCEApplication::getInstance()->systemRequestedQuit();
+    }
+
+    ImageComparator comparisonComponent;
+
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComparisonWindow)
+};
 
 class RendererComparisonApplication  : public juce::JUCEApplication
 {
@@ -13,30 +69,43 @@ public:
 
     void initialise (const juce::String&) override
     {
-        int64_t seed = 1234567890;
-
-        softwareRendererWindow = std::make_unique<TestWindow>("Software Renderer", 0, seed);
-        direct2DRendererWindow = std::make_unique<TestWindow>("Direct2D Renderer", 1, seed);
+//         softwareRendererWindow = std::make_unique<TestWindow>("Software Renderer", 0, seed);
+//         direct2DRendererWindow = std::make_unique<TestWindow>("Direct2D Renderer", 1, seed);
          comparisonWindow = std::make_unique<ComparisonWindow>();
 
         auto userArea = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
 
-        auto windowArea = userArea.removeFromLeft(userArea.getWidth() / 3);
-        auto border = softwareRendererWindow->getPeer()->getFrameSize();
-        windowArea = border.subtractedFrom(windowArea);
-        softwareRendererWindow->setBounds(windowArea);
-        direct2DRendererWindow->setBounds(windowArea.withX(windowArea.getRight()));
-        comparisonWindow->setBounds(windowArea.withX(direct2DRendererWindow->getRight()));
+        auto border = comparisonWindow->getPeer()->getFrameSize();
+        auto windowArea = border.subtractedFrom(userArea);
+//         softwareRendererWindow->setBounds(windowArea);
+//         direct2DRendererWindow->setBounds(windowArea.withX(windowArea.getRight()));
+//         comparisonWindow->setBounds(windowArea.withX(direct2DRendererWindow->getRight()));
+        comparisonWindow->setBounds(windowArea);
 
-        juce::Timer::callAfterDelay(500, [this]
+
+        //juce::Timer::callAfterDelay(500, [=]
             {
-                //comparisonWindow->softwareRendererSnapshot = softwareRendererWindow->createComponentSnapshot(softwareRendererWindow->getLocalBounds());
-                //comparisonWindow->direct2DRendererSnapshot = direct2DRendererWindow->createComponentSnapshot(direct2DRendererWindow->getLocalBounds());
-                comparisonWindow->softwareRendererSnapshot = juce::createSnapshotOfNativeWindow(softwareRendererWindow->getPeer()->getNativeHandle());
-                comparisonWindow->direct2DRendererSnapshot = juce::createSnapshotOfNativeWindow(direct2DRendererWindow->getPeer()->getNativeHandle());
+                auto imageBounds = comparisonWindow->comparisonComponent.testComponent.getLocalBounds();
+                juce::SoftwareImageType softwareImageType;
+                juce::Image softwareImage{ softwareImageType.create(juce::Image::ARGB, imageBounds.getWidth(), imageBounds.getHeight(), true) };
+                {
+                    juce::Graphics g{ softwareImage };
+                    comparisonWindow->comparisonComponent.testComponent.paintEntireComponent(g, false);
+                }
 
-                comparisonWindow->repaint();
-            });
+                juce::NativeImageType nativeImageType;
+                juce::Image nativeImage{ nativeImageType.create(juce::Image::ARGB, imageBounds.getWidth(), imageBounds.getHeight(), true) };
+                {
+                    juce::Graphics g{ nativeImage };
+                    comparisonWindow->comparisonComponent.testComponent.paintEntireComponent(g, false);
+                }
+
+                comparisonWindow->comparisonComponent.compare(softwareImage, nativeImage);
+
+//                 comparisonWindow->comparisonComponent.compare(juce::createSnapshotOfNativeWindow(softwareRendererWindow->getPeer()->getNativeHandle()),
+//                     juce::createSnapshotOfNativeWindow(direct2DRendererWindow->getPeer()->getNativeHandle()));
+                //comparisonWindow->comparisonComponent.compare(nativeImage, juce::createSnapshotOfNativeWindow(direct2DRendererWindow->getPeer()->getNativeHandle()));
+            };
     }
 
     void shutdown() override
@@ -54,64 +123,7 @@ public:
     {
     }
 
-    class TestWindow : public juce::DocumentWindow
-    {
-    public:
-        TestWindow (juce::String name, int renderer, int64_t seed)
-            : DocumentWindow (name,
-                              juce::Desktop::getInstance().getDefaultLookAndFeel()
-                                                          .findColour (juce::ResizableWindow::backgroundColourId),
-                              DocumentWindow::allButtons)
-        {
-            setUsingNativeTitleBar (true);
-            setContentOwned (new RenderTestComponent(seed), true);
-
-            setResizable (true, true);
-
-            getPeer()->setCurrentRenderingEngine(renderer);
-
-            setVisible (true);
-        }
-
-        void closeButtonPressed() override
-        {
-            JUCEApplication::getInstance()->systemRequestedQuit();
-        }
-
-    private:
-        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TestWindow)
-    };
-
-    class ComparisonWindow : public juce::DocumentWindow
-    {
-    public:
-        ComparisonWindow()
-            : DocumentWindow("Comparison",
-                juce::Desktop::getInstance().getDefaultLookAndFeel()
-                .findColour(juce::ResizableWindow::backgroundColourId),
-                DocumentWindow::allButtons)
-        {
-            setUsingNativeTitleBar(true);
-            setContentOwned(new ComparisonComponent{ softwareRendererSnapshot, direct2DRendererSnapshot }, true);
-
-            setResizable(true, true);
-
-            getPeer()->setCurrentRenderingEngine(0);
-
-            setVisible(true);
-        }
-
-        void closeButtonPressed() override
-        {
-            JUCEApplication::getInstance()->systemRequestedQuit();
-        }
-
-        juce::Image softwareRendererSnapshot;
-        juce::Image direct2DRendererSnapshot;
-
-    private:
-        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComparisonWindow)
-    };
+    
 
 private:
     std::unique_ptr<TestWindow> softwareRendererWindow;

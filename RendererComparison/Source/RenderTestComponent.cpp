@@ -22,9 +22,13 @@ RenderTestComponent::~RenderTestComponent()
 void RenderTestComponent::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);
+#if 0
     g.setGradientFill({ juce::Colours::orange, getLocalBounds().getTopLeft().toFloat(),
         juce::Colours::cyan, getLocalBounds().getBottomRight().toFloat(),
         false });
+#else
+    g.setColour(juce::Colours::white);
+#endif
     g.drawMultiLineText(text, 0, 0, getWidth(), juce::Justification::horizontallyJustified);
 }
 

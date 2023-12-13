@@ -1,20 +1,21 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "RenderTestComponent.h"
 
-class ComparisonComponent : public juce::Component
+class ImageComparator : public juce::Component
 {
 public:
-    ComparisonComponent(juce::Image& softwareRendererSnapshot_, juce::Image& direct2DRendererSnapshot_);
-    ~ComparisonComponent() override;
+    ImageComparator();
+    ~ImageComparator() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
-    void compare();
+    void compare(juce::Component& sourceComponent);
+    void compare(juce::Image softwareRendererSnapshot_, juce::Image direct2DRendererSnapshot_);
 
 private:
-    juce::Image& softwareRendererSnapshot;
-    juce::Image& direct2DRendererSnapshot;
+    juce::Image sourceImage1, sourceImage2;
 
     juce::Image redComparison;
     juce::Image greenComparison;
@@ -26,5 +27,5 @@ private:
     juce::StatisticsAccumulator<double> greenStats;
     juce::StatisticsAccumulator<double> alphaStats;
        
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ComparisonComponent)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ImageComparator)
 };

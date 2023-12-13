@@ -1,32 +1,21 @@
-#include "ComparisonComponent.h"
+#include "ImageComparator.h"
 
-ComparisonComponent::ComparisonComponent(juce::Image& softwareRendererSnapshot_, juce::Image& direct2DRendererSnapshot_) :
-    softwareRendererSnapshot(softwareRendererSnapshot_),
-    direct2DRendererSnapshot(direct2DRendererSnapshot_)
+ImageComparator::ImageComparator()
 {
     setSize (600, 400);
 }
 
-ComparisonComponent::~ComparisonComponent()
+ImageComparator::~ImageComparator()
 {
 }
 
-void ComparisonComponent::paint (juce::Graphics& g)
+void ImageComparator::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);
 
-    if (redComparison.isNull())
-    {
-        compare();
-		if (redComparison.getBounds().isEmpty())
-		{
-			return;
-		}
-    }
-
-    juce::Image* images[] = { &redComparison, & greenComparison, & blueComparison, & alphaComparison};
-	juce::StatisticsAccumulator<double> * stats[] = { &redStats, &greenStats, &blueStats, &alphaStats };
-    juce::Rectangle<int> r{ 0, 0, getWidth() / 2, getHeight() / 2 };
+    juce::Image* images[] = { &sourceImage1, &sourceImage2, &redComparison, & greenComparison, & blueComparison, & alphaComparison};
+	juce::StatisticsAccumulator<double> * stats[] = { nullptr, nullptr, &redStats, &greenStats, &blueStats, &alphaStats };
+    juce::Rectangle<int> r{ 0, 0, getWidth() / 6, getHeight() };
 	int index = 0;
     for (auto const & image : images)
     {
@@ -34,7 +23,7 @@ void ComparisonComponent::paint (juce::Graphics& g)
         {
             g.drawImageWithin(*image, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::RectanglePlacement::centred);
 
-			if (stats[index]->getCount() > 0)
+			if (stats[index] && stats[index]->getCount() > 0)
 			{
 				juce::String text;
 				text << "Average: " << stats[index]->getAverage() << juce::newLine;
@@ -66,16 +55,19 @@ void ComparisonComponent::paint (juce::Graphics& g)
     }
 }
 
-void ComparisonComponent::resized()
+void ImageComparator::resized()
 {
 }
 
-void ComparisonComponent::compare()
+void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image direct2DRendererSnapshot)
 {
 	if (softwareRendererSnapshot.isNull() || direct2DRendererSnapshot.isNull())
 	{
 		return;
 	}
+
+	sourceImage1 = softwareRendererSnapshot.createCopy();
+	sourceImage2 = direct2DRendererSnapshot.createCopy();
 
     redComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
     blueComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
@@ -132,4 +124,26 @@ void ComparisonComponent::compare()
 	        }
 	    } 
     }
+
+	repaint();
+}
+
+void ImageComparator::compare(juce::Component& sourceComponent)
+{
+    auto imageBounds = sourceComponent.getLocalBounds();
+    juce::SoftwareImageType softwareImageType;
+    juce::Image softwareImage{ softwareImageType.create(juce::Image::ARGB, imageBounds.getWidth(), imageBounds.getHeight(), true) };
+    {
+        juce::Graphics g{ softwareImage };
+		sourceComponent.paintEntireComponent(g, false);
+    }
+
+    juce::NativeImageType nativeImageType;
+    juce::Image nativeImage{ nativeImageType.create(juce::Image::ARGB, imageBounds.getWidth(), imageBounds.getHeight(), true) };
+    {
+        juce::Graphics g{ nativeImage };
+		sourceComponent.paintEntireComponent(g, false);
+    }
+
+    compare(softwareImage, nativeImage);
 }

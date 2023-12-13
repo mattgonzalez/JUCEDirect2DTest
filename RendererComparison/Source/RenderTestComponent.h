@@ -5,7 +5,7 @@
 class RenderTestComponent : public juce::Component
 {
 public:
-    RenderTestComponent(int64_t seed);
+    RenderTestComponent(int64_t seed = 1234567890);
     ~RenderTestComponent() override;
 
     void paint (juce::Graphics&) override;
