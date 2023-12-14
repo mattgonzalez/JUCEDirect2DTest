@@ -13,9 +13,9 @@ void ImageComparator::paint (juce::Graphics& g)
 {
     g.fillAll(juce::Colours::black);
 
-    juce::Image* images[] = { &sourceImage1, &sourceImage2, &redComparison, & greenComparison, & blueComparison, & alphaComparison};
+    juce::Image* images[] = { /*&sourceImage1, &sourceImage2, &redComparison, & greenComparison, & blueComparison,*/ & alphaComparison};
 	juce::StatisticsAccumulator<double> * stats[] = { nullptr, nullptr, &redStats, &greenStats, &blueStats, &alphaStats };
-    juce::Rectangle<int> r{ 0, 0, getWidth() / 6, getHeight() };
+    juce::Rectangle<int> r{ 0, 0, getWidth(), getHeight() };
 	int index = 0;
     for (auto const & image : images)
     {
@@ -43,7 +43,6 @@ void ImageComparator::paint (juce::Graphics& g)
             g.drawText("Nope", r, juce::Justification::centred);
         }
 
-
         r.setX(r.getRight());
         if (r.getX() >= proportionOfWidth(0.75f))
         {
@@ -57,6 +56,18 @@ void ImageComparator::paint (juce::Graphics& g)
 
 void ImageComparator::resized()
 {
+	if (original.isValid())
+	{
+        sourceImage2 = original.createCopy();
+        {
+            sourceImage2.clear(sourceImage2.getBounds());
+
+            juce::Graphics g{ sourceImage2 };
+            g.drawImageTransformed(original, juce::AffineTransform::translation(0.0f, JUCE_LIVE_CONSTANT(-5.0f)));
+        }
+
+		compare();
+    }
 }
 
 void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image direct2DRendererSnapshot)
@@ -66,17 +77,29 @@ void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image 
 		return;
 	}
 
+	original = direct2DRendererSnapshot.createCopy();
+
 	sourceImage1 = softwareRendererSnapshot.createCopy();
 	sourceImage2 = direct2DRendererSnapshot.createCopy();
 
-    redComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
-    blueComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
-    greenComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
-    alphaComparison = juce::Image{ juce::Image::ARGB, softwareRendererSnapshot.getWidth(), softwareRendererSnapshot.getHeight(), true };
+	compare();
+}
+
+void ImageComparator::compare()
+{
+	if (sourceImage1.isNull() || sourceImage2.isNull())
+	{
+		return;
+	}
+
+    redComparison = juce::Image{ juce::Image::ARGB, sourceImage1.getWidth(), sourceImage1.getHeight(), true };
+    blueComparison = juce::Image{ juce::Image::ARGB, sourceImage1.getWidth(), sourceImage1.getHeight(), true };
+    greenComparison = juce::Image{ juce::Image::ARGB, sourceImage1.getWidth(), sourceImage1.getHeight(), true };
+    alphaComparison = juce::Image{ juce::Image::ARGB, sourceImage1.getWidth(), sourceImage1.getHeight(), true };
 
     {
-	    juce::Image::BitmapData softwareRendererSnapshotData{ softwareRendererSnapshot, juce::Image::BitmapData::readOnly };
-	    juce::Image::BitmapData direct2DRendererSnapshotData{ direct2DRendererSnapshot, juce::Image::BitmapData::readOnly };
+	    juce::Image::BitmapData softwareRendererSnapshotData{ sourceImage1, juce::Image::BitmapData::readOnly };
+	    juce::Image::BitmapData direct2DRendererSnapshotData{ sourceImage2, juce::Image::BitmapData::readOnly };
 	    juce::Image::BitmapData redData{ redComparison, juce::Image::BitmapData::writeOnly };
 	    juce::Image::BitmapData greenData{ greenComparison, juce::Image::BitmapData::writeOnly };
 	    juce::Image::BitmapData blueData{ blueComparison, juce::Image::BitmapData::writeOnly };
@@ -118,7 +141,7 @@ void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image 
 	            }
 	            
 	            {
-	                auto brightnessDelta = std::abs(c1.getFloatAlpha() - c2.getFloatAlpha());
+	                auto brightnessDelta = std::abs(c1.getPerceivedBrightness() - c2.getPerceivedBrightness());
 	                alphaData.setPixelColour(x, y, juce::Colour::greyLevel(brightnessDelta));
 	            }
 	        }

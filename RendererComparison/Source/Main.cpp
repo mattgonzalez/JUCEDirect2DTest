@@ -45,6 +45,7 @@ public:
         getPeer()->setCurrentRenderingEngine(0);
 
         setVisible(true);
+
     }
 
     void closeButtonPressed() override
@@ -82,7 +83,13 @@ public:
 //         comparisonWindow->setBounds(windowArea.withX(direct2DRendererWindow->getRight()));
         comparisonWindow->setBounds(windowArea);
 
+        auto image1 = juce::ImageCache::getFromFile(juce::File{ "C:/Users/Matt Gonzalez/Echo Dropbox/Matt Gonzalez/Direct2D/demorunner d2d.PNG" });
+        auto image2 = juce::ImageCache::getFromFile(juce::File{ "C:/Users/Matt Gonzalez/Echo Dropbox/Matt Gonzalez/Direct2D/demorunner gdi.PNG" });
+        comparisonWindow->comparisonComponent.compare(image1, image2);
 
+
+
+#if 0
         //juce::Timer::callAfterDelay(500, [=]
             {
                 auto imageBounds = comparisonWindow->comparisonComponent.testComponent.getLocalBounds();
@@ -106,6 +113,7 @@ public:
 //                     juce::createSnapshotOfNativeWindow(direct2DRendererWindow->getPeer()->getNativeHandle()));
                 //comparisonWindow->comparisonComponent.compare(nativeImage, juce::createSnapshotOfNativeWindow(direct2DRendererWindow->getPeer()->getNativeHandle()));
             };
+#endif
     }
 
     void shutdown() override

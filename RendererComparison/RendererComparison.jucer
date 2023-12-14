@@ -4,10 +4,10 @@
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
   <MAINGROUP id="bmfCvK" name="RendererComparison">
     <GROUP id="{19F0B005-C22C-F011-E8D9-E2945EA649FE}" name="Source">
-      <FILE id="Xns0TI" name="ComparisonComponent.cpp" compile="1" resource="0"
-            file="Source/ComparisonComponent.cpp"/>
-      <FILE id="mY7RBB" name="ComparisonComponent.h" compile="0" resource="0"
-            file="Source/ComparisonComponent.h"/>
+      <FILE id="DjVtUs" name="ImageComparator.h" compile="0" resource="0"
+            file="Source/ImageComparator.h"/>
+      <FILE id="ZxKFa3" name="ImageComparator.cpp" compile="1" resource="0"
+            file="Source/ImageComparator.cpp"/>
       <FILE id="QTSvXa" name="Main.cpp" compile="1" resource="0" file="Source/Main.cpp"/>
       <FILE id="vEfrLW" name="RenderTestComponent.h" compile="0" resource="0"
             file="Source/RenderTestComponent.h"/>
@@ -21,6 +21,7 @@
     <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
   </MODULES>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1"/>
   <EXPORTFORMATS>
@@ -35,6 +36,7 @@
         <MODULEPATH id="juce_events" path="../../../../JUCE-dev/modules"/>
         <MODULEPATH id="juce_graphics" path="../../../../JUCE-dev/modules"/>
         <MODULEPATH id="juce_gui_basics" path="../../../../JUCE-dev/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../../JUCE-dev/modules"/>
       </MODULEPATHS>
     </VS2022>
   </EXPORTFORMATS>
