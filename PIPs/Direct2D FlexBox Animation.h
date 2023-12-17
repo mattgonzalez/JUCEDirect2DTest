@@ -29,14 +29,12 @@ public:
     {
     }
 
-    void setDestination(juce::Point<float> destination_, double pixelsPerMsec_)
+    void setDestination(juce::Point<float> destination_, double travelTimeMsec)
     {
+        auto currentPosition = component.getPosition().toFloat().transformedBy(component.getTransform());
         destination = destination_;
-        maxPixelsPerMsec = pixelsPerMsec_;
-        if (currentPixelsPerMsec <= 0.0)
-        {
-            currentPixelsPerMsec = pixelsPerMsec_ * 0.01;
-        }
+        auto distance = destination_.getDistanceFrom(currentPosition);
+        pixelsPerMsec = distance / travelTimeMsec;
     }
 
     void animate(double currentTimeMsec)
@@ -45,7 +43,7 @@ public:
         if (destination.getDistanceFrom(currentPosition) < 1.0f)
         {
             component.setTransform(juce::AffineTransform::translation(destination));
-            currentPixelsPerMsec = 0.0;
+            pixelsPerMsec = 0.0;
             return;
         }
 
@@ -56,20 +54,16 @@ public:
         lastMsec = currentTimeMsec;
 
         juce::Line<float> vector{ currentPosition, destination };
-        auto travelDistance = (float)(currentPixelsPerMsec * elapsedMsec);
+        auto travelDistance = (float)(pixelsPerMsec * elapsedMsec);
         travelDistance = juce::jmin(travelDistance, vector.getLength());
         component.setTransform(juce::AffineTransform::translation(vector.getPointAlongLine(travelDistance)));
-
-        currentPixelsPerMsec *= 1.1;
-        currentPixelsPerMsec = juce::jmin(maxPixelsPerMsec, currentPixelsPerMsec);
     }
 
 private:
     juce::Component& component;
     juce::Point<float> destination;
     double lastMsec = juce::Time::getMillisecondCounterHiRes();
-    double currentPixelsPerMsec = 0.0;
-    double maxPixelsPerMsec = 0.0;
+    double pixelsPerMsec = 0.0;
 };
 
 class FlexBoxAnimation : public juce::Component
@@ -111,7 +105,7 @@ public:
         {
             auto* c = flexComponents[i];
             auto const& item = flexBox.items[i];
-            c->restPosition = item.currentBounds.getPosition();
+            c->animator.setDestination(item.currentBounds.getPosition(), 500.0);
         }
     }
 
@@ -123,21 +117,6 @@ public:
     void animate()
     {
         auto now = juce::Time::getMillisecondCounterHiRes();
-        auto mousePos = getMouseXYRelative();
-        if (getLocalBounds().contains(mousePos))
-        {
-            for (auto flexComponent : flexComponents)
-            {
-                flexComponent->animator.setDestination(mousePos.toFloat(), 0.4);
-            }
-        }
-        else
-        {
-            for (auto flexComponent : flexComponents)
-            {
-                flexComponent->animator.setDestination(flexComponent->restPosition, 1.0);
-            }
-        }
 
         for (auto flexComponent : flexComponents)
         {
@@ -150,7 +129,6 @@ public:
 private:
     juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
     double lastMsec = juce::Time::getMillisecondCounterHiRes();
-    juce::AffineTransform animatedTransform;
 
     struct FlexComponent : juce::Component
     {
@@ -178,7 +156,6 @@ private:
         juce::Path path;
 
         ComponentTransformAnimator animator{ *this };
-        juce::Point<float> restPosition;
     };
 
     juce::OwnedArray<FlexComponent> flexComponents;
