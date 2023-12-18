@@ -1,6 +1,6 @@
 # JUCE Direct2D Test
 
-This repostitory is intended as a companion for the JUCE Direct2D renderer. It
+This repository is intended as a companion for the JUCE Direct2D renderer. It
 contains small PIPs intended to demonstrate and test the renderer.
 
 Each PIP is a single header file that you can load into the JUCE Projucer and
