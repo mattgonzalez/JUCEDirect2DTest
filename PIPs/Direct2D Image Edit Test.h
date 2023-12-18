@@ -10,7 +10,7 @@
   exporters:        VS2022
 
   moduleFlags:      JUCE_STRICT_REFCOUNTEDPOINTER=1
-  defines:          JUCE_DIRECT2D=1
+  defines:
 
   type:             Component
   mainClass:        ImageEditTest

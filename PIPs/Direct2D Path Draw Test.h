@@ -10,7 +10,7 @@
   exporters:        VS2022
 
   moduleFlags:      JUCE_STRICT_REFCOUNTEDPOINTER=1
-  defines:          JUCE_DIRECT2D=1
+  defines:
 
   type:             Component
   mainClass:        PathDrawTest
@@ -79,11 +79,11 @@ public:
     {
         juce::Rectangle<int> r{ 10, 10, 250, 30 };
         modeCombo.setBounds(r);
-        
+
         r.translate(0, 40);
         transformToggle.setBounds(r.withWidth(100));
         transformCombo.setBounds(transformToggle.getBounds().translated(transformToggle.getWidth(), 0));
-        
+
         r.translate(0, 40);
         strokeThicknessSlider.setBounds(r);
 
@@ -105,10 +105,10 @@ public:
         {
             transform = animatedTransform;
         }
-        
+
         //
         // Fill or stroke the Path member variable to take advantage of
-        // geometry caching 
+        // geometry caching
         //
         switch (modeCombo.getSelectedId())
         {
@@ -208,12 +208,12 @@ private:
     // If you have an Path you want to use more than once, keep it as a member
     // variable or on the heap. The renderer will create and cache a geometry
     // realization for the Path if you draw the same Path more than once.
-    // 
+    //
     // Drawing a cached geometry realization is much faster than drawing a non-cached Path.
     //
     juce::Path cachedPath;
     juce::Rectangle<int> pathPaintArea;
-    
+
     void createPath()
     {
         cachedPath.clear();

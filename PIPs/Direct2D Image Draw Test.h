@@ -10,7 +10,7 @@
   exporters:        VS2022
 
   moduleFlags:      JUCE_STRICT_REFCOUNTEDPOINTER=1
-  defines:          JUCE_DIRECT2D=1
+  defines:
 
   type:             Component
   mainClass:        ImageDrawTest
@@ -159,14 +159,14 @@ public:
         //
         // Cached image data can be deleted unexpectedly; when that happens, the bitmap data is gone
         // and will need to be recreated.
-        // 
+        //
         // The renderer will call imageDataBeingDeleted for any listeners attached to the ImagePixelData
-        // 
+        //
         // Note that the DXGI adapter may not be available yet when this callback happens so you'll need to
         // defer recreating your images later
-        // 
+        //
         // You can also call Image::isValid() or Image::isNull() to see if the bitmap data is still available.
-        // 
+        //
         // To test this, change the Windows display DPI while your app is running
         //
     }
@@ -201,12 +201,12 @@ private:
     // If you have an Image you want to use more than once, keep that image as a member
     // variable, on the heap, or in the JUCE ImageCache. The renderer will keep the bitmap
     // data cached on the GPU as long as the Image's internal data exists.
-    // 
+    //
     // Drawing a cached image is much faster than drawing a non-cached image.
     //
     juce::Image cachedImage;
     juce::Rectangle<int> imagePaintArea;
-    
+
     void createCachedImage()
     {
         imagePaintArea = getLocalBounds().reduced(100);

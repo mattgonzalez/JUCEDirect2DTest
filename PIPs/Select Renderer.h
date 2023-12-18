@@ -64,7 +64,7 @@ public:
         //
         // parentHierarchyChanged will be called when the parent desktop window
         // component peer is created or destroyed
-        // 
+        //
         // Check to see if the peer exists and set the parent window to software
         // rendering mode
         //
