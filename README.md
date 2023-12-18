@@ -9,23 +9,35 @@ drag-and-drop the PIP onot the Projucer app.
 
 ## Using Direct2D with JUCE Direct2D
 
-You'll need the TODO branch of the offical JUCE repository:
+You'll need the the direct2d branch of the offical JUCE repository:
 
 TODO link goes here
 
-All you need to do is #define JUCE_DIRECT2D=1 in your app and rebuild.
-Or, build and run one of the PIPs, which already have JUCE_DIRECT2D defined.
+Just pull, switch to that branch, and rebuild. Or, build and run one of the PIPs.
 
 Painting with Direct2D works just like painting with standard JUCE; you shouldn't
 have to make any code changes for your application to run. The PIPs demonstrate
 how to improve performance using cached images and paths, and how to handle the
 DirectX graphics adapter unexpectedly vanishing.
 
+For more details on working with Direct2D, please refer to the wiki for this 
+repository.
+
+## Issues
+
+Please submit any issues to the issue tracker on this repository, along with a 
+DirectX diagnostic report for your system. To export the diagnostic report, run
+the DirectX Diagnostic Tool. You can find the DirectX Diagnostic Tool app by searching 
+your Start menu. Alternatively, open the Run command dialog or a command prompt 
+and enter "dxdiag".
+
+Please submit the exported report along with your issue
+
 
 ## Test PIPs
 
-There are currently three PIPS in the repository that demonstrate using
-JUCE Graphics methods with Direct2D.
+The PIPs in the repository demonstrate and validate using JUCE Graphics methods
+with Direct2D.
 
 
 ### Image Draw Test
@@ -35,28 +47,19 @@ Graphics::drawImageWithin, or Graphics::drawImageTransformed. It also shows how
 by simply keeping the Image as a member variable in the Component, the renderer
 can cache the Image in the GPU for significantly faster performance.
 
-The Image Draw Test also demonstrates how to handle recreating image data in the
+The Image Draw Test also shows how to handle recreating image data in the
 event of a display or adapter change.
 
 ### Image Edit Test
 
 Similarly, the Image Edit Test creates a JUCE Image and then a second modified
-Image using Image::clear, Image::rescaled, Image::createCopy,
+Image using either Image::clear, Image::rescaled, Image::createCopy,
 Image::convertedToFormat, or Image::getClipedImage.
 
 ### Path Draw Test
 
 The Path Draw Test creates and draws either a filled Path or a stroked Path. It also
-demonstrates how, much like the Image tests, keeping a Path as a member variable
+lays out how, much like the Image tests, keeping a Path as a member variable
 allows the renderer to cache the Path in the GPU.
 
-
-## Optimizing for Direct2D
-
-
-## Direct2D Images
-
-
-
-## DXGI adapter changes
 
