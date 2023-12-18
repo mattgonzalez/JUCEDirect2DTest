@@ -39,6 +39,9 @@ Please submit the exported report along with your issue
 The PIPs in the repository demonstrate and validate using JUCE Graphics methods
 with Direct2D.
 
+### Select Renderer
+
+This PIP explains how to switch between Direct2D mode and the software renderer.
 
 ### Image Draw Test
 
