@@ -17,6 +17,12 @@ public:
 private:
     juce::Image original;
     juce::Image sourceImage1, sourceImage2;
+    float transformY = 0.0f, transformScale = 1.0f;
+
+    juce::Slider ySlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxBelow };
+    juce::Slider scaleSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxBelow };
+
+    void transform();
 
     juce::Image redComparison;
     juce::Image greenComparison;

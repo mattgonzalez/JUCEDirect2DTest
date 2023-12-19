@@ -83,28 +83,35 @@ public:
 //         comparisonWindow->setBounds(windowArea.withX(direct2DRendererWindow->getRight()));
         comparisonWindow->setBounds(windowArea);
 
+#if 0
         auto image1 = juce::ImageCache::getFromFile(juce::File{ "C:/Users/Matt Gonzalez/Echo Dropbox/Matt Gonzalez/Direct2D/demorunner d2d.PNG" });
         auto image2 = juce::ImageCache::getFromFile(juce::File{ "C:/Users/Matt Gonzalez/Echo Dropbox/Matt Gonzalez/Direct2D/demorunner gdi.PNG" });
         comparisonWindow->comparisonComponent.compare(image1, image2);
+#endif
 
 
-
-#if 0
+#if 1
         //juce::Timer::callAfterDelay(500, [=]
             {
-                auto imageBounds = comparisonWindow->comparisonComponent.testComponent.getLocalBounds();
+                auto imageBounds = juce::Rectangle<int>{ 100, 100 };
                 juce::SoftwareImageType softwareImageType;
                 juce::Image softwareImage{ softwareImageType.create(juce::Image::ARGB, imageBounds.getWidth(), imageBounds.getHeight(), true) };
                 {
                     juce::Graphics g{ softwareImage };
-                    comparisonWindow->comparisonComponent.testComponent.paintEntireComponent(g, false);
+                    //comparisonWindow->comparisonComponent.testComponent.paintEntireComponent(g, false);
+                    g.setColour(juce::Colours::white);
+                    g.setFont(20.0f);
+                    g.drawText("This is text", imageBounds, juce::Justification::centred, false);
                 }
 
                 juce::NativeImageType nativeImageType;
                 juce::Image nativeImage{ nativeImageType.create(juce::Image::ARGB, imageBounds.getWidth(), imageBounds.getHeight(), true) };
                 {
                     juce::Graphics g{ nativeImage };
-                    comparisonWindow->comparisonComponent.testComponent.paintEntireComponent(g, false);
+                    //comparisonWindow->comparisonComponent.testComponent.paintEntireComponent(g, false);
+                    g.setColour(juce::Colours::white);
+                    g.setFont(20.0f);
+                    g.drawText("This is text", imageBounds, juce::Justification::centred, false);
                 }
 
                 comparisonWindow->comparisonComponent.compare(softwareImage, nativeImage);
