@@ -1,6 +1,6 @@
 # JUCE Direct2D Test
 
-This repository is a companion for the JUCE Direct2D renderer. It contains small PIPs intended to demonstrate and test the renderer.
+This repository is a companion for the JUCE Direct2D beta renderer. It contains small PIPs intended to demonstrate and test the renderer along with documentation in the repository wiki.
 
 Each PIP is a single header file that you can load into the JUCE Projucer and automatically generate a project. Just open the PIP with the Projucer, or drag-and-drop the PIP onto the Projucer app.
 
@@ -8,7 +8,7 @@ Each PIP is a single header file that you can load into the JUCE Projucer and au
 
 You'll need the the direct2d branch of the offical JUCE repository:
 
-TODO link goes here
+https://github.com/juce-framework/JUCE/tree/direct2d
 
 Just pull, switch to that branch, and rebuild. Or, build and run one of the PIPs.
 
