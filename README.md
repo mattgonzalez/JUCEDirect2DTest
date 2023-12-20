@@ -4,13 +4,13 @@ This repository is a companion for the JUCE Direct2D beta renderer. It contains 
 
 Each PIP is a single header file that you can load into the JUCE Projucer and automatically generate a project. Just open the PIP with the Projucer, or drag-and-drop the PIP onto the Projucer app.
 
-## Using Direct2D with JUCE Direct2D
+## Using Direct2D with JUCE
 
 You'll need the the direct2d branch of the offical JUCE repository:
 
 https://github.com/juce-framework/JUCE/tree/direct2d
 
-Just pull, switch to that branch, and rebuild. Or, build and run one of the PIPs.
+Just pull, switch to that branch, and rebuild. Or, build and run one of the PIPs in this repository.
 
 Painting with Direct2D works just like painting with standard JUCE; you shouldn't have to make any code changes for your application to run. The PIPs demonstrate how to improve performance using cached images and paths, and how to handle the DirectX graphics adapter unexpectedly vanishing.
 
