@@ -42,7 +42,7 @@ public:
 
         setResizable(true, true);
 
-        getPeer()->setCurrentRenderingEngine(0);
+        getPeer()->setCurrentRenderingEngine(1);
 
         setVisible(true);
 
@@ -83,14 +83,15 @@ public:
 //         comparisonWindow->setBounds(windowArea.withX(direct2DRendererWindow->getRight()));
         comparisonWindow->setBounds(windowArea);
 
-#if 0
-        auto image1 = juce::ImageCache::getFromFile(juce::File{ "C:/Users/Matt Gonzalez/Echo Dropbox/Matt Gonzalez/Direct2D/demorunner d2d.PNG" });
-        auto image2 = juce::ImageCache::getFromFile(juce::File{ "C:/Users/Matt Gonzalez/Echo Dropbox/Matt Gonzalez/Direct2D/demorunner gdi.PNG" });
+#if 1
+        //auto image1 = juce::ImageCache::getFromFile(juce::File{ "C:/temp/demorunner d2d.PNG" });
+        auto image1 = juce::ImageCache::getFromFile(juce::File{ "C:/temp/edited.PNG" });
+        auto image2 = juce::ImageCache::getFromFile(juce::File{ "C:/temp/demorunner gdi.PNG" });
         comparisonWindow->comparisonComponent.compare(image1, image2);
 #endif
 
 
-#if 1
+#if 0
         //juce::Timer::callAfterDelay(500, [=]
             {
                 auto imageBounds = juce::Rectangle<int>{ 100, 100 };
