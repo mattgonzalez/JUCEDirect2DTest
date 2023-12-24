@@ -5,68 +5,95 @@ ImageComparator::ImageComparator() :
 {
     setSize(600, 400);
     setWantsKeyboardFocus(true);
+
+    listBox.setModel(this);
+    addAndMakeVisible(listBox);
+    listBox.setRowHeight(60);
+
+    addAndMakeVisible(folderCombo);
+    folderCombo.onChange = [this]() { updateFileCombo(); };
+    addAndMakeVisible(fileCombo);
+    fileCombo.onChange = [this]() { compareSelectedFilePair(); };
 }
 
 ImageComparator::~ImageComparator()
 {
+    listBox.setModel(nullptr);
 }
 
 void ImageComparator::paint(juce::Graphics& g)
 {
-    juce::GlowEffect effect;
-
     g.fillAll(juce::Colours::black);
 
     if (compareTask.isThreadRunning())
     {
+        g.drawImageAt(compareTask.brightnessComparison, listBox.getRight(), 0);
+
+        juce::ScopedLock locker{ compareTask.lock };
+        for (auto it = compareTask.problemAreas.rbegin(); it != compareTask.problemAreas.rend(); ++it)
+        {
+            auto const& problemArea = *it;
+            auto c = juce::Colours::red;
+            g.setColour(c.withAlpha(0.75f));
+            g.drawRect(problemArea.area.translated(listBox.getRight(), 0));
+        }
+
         return;
     }
 
-    juce::Image* images[] = { &compareTask.output1,
-        &compareTask.output2 /*,
+    juce::Image* images[] = { &sourceImage1,
+        &sourceImage2
+        /*&compareTask.brightnessComparison,
+        &compareTask.problemImage*/
+        /*,
         &compareTask.redComparison,
         &compareTask.greenComparison,
         &compareTask.blueComparison, */
         /*,&compareTask.brightnessComparison */ };
-    juce::StatisticsAccumulator<double>* stats[] = { /* nullptr, nullptr, &redStats, &greenStats, &blueStats, &brightnessStats*/ nullptr , nullptr, nullptr };
-    juce::Rectangle<int> r{ 0, 0, getWidth() / 2, getHeight() }, lastR;
-    int index = 0;
+    juce::Rectangle<int> r{ listBox.getRight(), 0, (getWidth() - listBox.getWidth()) / 2, getHeight() / 1}, lastR;
     for (auto const& image : images)
     {
         if (image->isValid())
         {
-            g.drawImageWithin(*image, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::RectanglePlacement::centred);
-              //g.drawImageAt(*image, r.getX(), r.getY());
+            g.setColour(juce::Colours::black);
+            g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
 
-            auto testImage = image->createCopy();
-            testImage.clear(testImage.getBounds(), juce::Colours::transparentBlack);
+            auto row = listBox.getSelectedRow();
+            if (row >= 0)
             {
-                juce::Graphics tg{ testImage };
-                tg.getInternalContext().applyEffect(effect, *image, 1.0f, 1.0f);
+                auto const& problemArea = compareTask.problemAreas[row];
+                auto section = image->getClippedImage(problemArea.area).convertedToFormat(juce::Image::ARGB);
+
+                auto imageArea = r.reduced(50, 50);
+                g.drawImageWithin(section, imageArea.getX(), imageArea.getY(), imageArea.getWidth(), imageArea.getHeight(), juce::RectanglePlacement::centred);
             }
-
-            //g.drawImageWithin(testImage, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::RectanglePlacement::centred);
-
-#if 0
-            if (stats[index] && stats[index]->getCount() > 0)
+            else
             {
-                juce::String text;
-                text << "Average: " << stats[index]->getAverage() << juce::newLine;
-                text << "Max: " << stats[index]->getMaxValue() << juce::newLine;
-                text << "Std.dev: " << stats[index]->getStandardDeviation() << juce::newLine;
+                g.drawImageWithin(image->convertedToFormat(juce::Image::ARGB), r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::RectanglePlacement::centred);
 
-                g.setColour(juce::Colours::darkgrey);
-                g.fillRect(juce::Rectangle{ r.getX() + 40, r.getY() + 20, 200, 100 });
+                for (auto it = compareTask.problemAreas.rbegin(); it != compareTask.problemAreas.rend(); ++it)
+                {
+                    auto const& problemArea = *it;
 
-                g.setColour(juce::Colours::white);
-                g.drawMultiLineText(text, r.getX() + 50, r.getY() + 35, r.getWidth(), juce::Justification::centredLeft);
+                    if (problemArea.getScore() > 2.0f)
+                    {
+                        juce::RectanglePlacement placement;
+
+                        auto transform = placement.getTransformToFit(image->getBounds().toFloat(), r.toFloat());
+                        auto area = problemArea.area.toFloat().transformedBy(transform);
+
+                        //area = area.withSizeKeepingCentre(48.0f, 48.0f);
+                        //auto c = problemArea.second > 50.0f ? juce::Colours::red : juce::Colours::darkgrey;
+                        auto c = juce::Colours::red;
+                        g.setColour(c.withAlpha(0.75f));
+                        //g.drawRect(area);
+                        g.fillEllipse(area);
+                        g.setColour(juce::Colours::white);
+                        g.setFont(g.getCurrentFont().boldened());
+                        g.drawText(juce::String{ problemArea.getScore(), 1 }, area, juce::Justification::centred);
+                    }
+                }
             }
-#endif
-        }
-        else
-        {
-            g.setColour(juce::Colours::white);
-            g.drawText("Nope", r, juce::Justification::centred);
         }
 
         lastR = r;
@@ -77,50 +104,72 @@ void ImageComparator::paint(juce::Graphics& g)
             r.setX(0);
             r.setY(r.getBottom());
         }
-
-        ++index;
     }
-
-    if (compareTask.brightnessComparison.isValid())
-    {
-        //g.drawImageAt(compareTask.problemImage, 0, 0);
-        //g.drawImageWithin(compareTask.output1, 0, 0, getWidth(), getHeight(), juce::RectanglePlacement::centred);
-#if 0
-        auto problemImage = compareTask.brightnessComparison.createCopy();
-        problemImage.clear(problemImage.getBounds(), juce::Colours::transparentBlack);
-        auto problemStepIndex = compareTask.problemSteps.size() - 1;
-
-        compareTask.problemStepIndex = juce::jmin(compareTask.problemStepIndex + 1, compareTask.problemSteps.size() - 1);
-
-        {
-            juce::Graphics pg{ problemImage };
-            int areaIndex = 0;
-            for (auto const& area : compareTask.problemSteps[problemStepIndex].areas)
-            {
-                pg.setColour(juce::Colours::red.withAlpha(0.25f));
-                pg.drawRect(area);
-
-                auto score = compareTask.problemSteps[problemStepIndex].scores[areaIndex++];
-                pg.setColour(juce::Colours::hotpink);
-                pg.drawText(juce::String{ score, 1 }, area, juce::Justification::centred);
-            }
-
-            pg.setColour(juce::Colours::white);
-            pg.drawText(juce::String{ problemStepIndex }, problemImage.getBounds(), juce::Justification::centred);
-        }
-
-        r = lastR;
-        //g.drawImageAt(problemImage, 0, 0);
-        g.drawImageWithin(problemImage, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::RectanglePlacement::centred);
-#endif
-    }
-
-    //juce::Timer::callAfterDelay(20, [this]() { repaint(); });
-    //repaint();
 }
 
 void ImageComparator::resized()
 {
+    listBox.setBounds(0, 0, 300, getHeight());
+    folderCombo.setBounds(listBox.getRight() + 10, 10, 300, 30);
+    fileCombo.setBounds(folderCombo.getBounds().translated(0, 32));
+}
+
+void ImageComparator::updateFileCombo()
+{
+    fileCombo.clear();
+
+    filePairs.clear();
+
+    auto folder = mainDirectory.getChildFile(folderCombo.getText());
+    auto files = folder.findChildFiles(juce::File::findFiles, false, "*.png");
+    for (auto const& file : files)
+    {
+        auto filename = file.getFileNameWithoutExtension();
+        if (filename.endsWith("GDI"))
+        {
+            auto gdiFile = file;
+            filename = filename.replaceSection(filename.length() - 3, 3, "D2D");
+            auto d2dFile = file.getSiblingFile(filename).withFileExtension("png");
+            filePairs.add({ gdiFile, d2dFile });
+        }
+    }
+
+    int id = 1;
+    for (auto const& filePair : filePairs)
+    {
+        auto text = filePair.first.getFileNameWithoutExtension().upToFirstOccurrenceOf("GDI", false, false).trim();
+        fileCombo.addItem(text, id++);
+    }
+
+    fileCombo.setSelectedId(1, juce::sendNotificationSync);
+}
+
+void ImageComparator::compareSelectedFilePair()
+{
+    if (compareTask.isThreadRunning())
+    {
+        return;
+    }
+
+    auto folder = mainDirectory.getChildFile(folderCombo.getText());
+    auto filename = fileCombo.getText();
+    auto gdiFile = folder.getChildFile(filename + " GDI").withFileExtension("png");
+    auto d2dFile = folder.getChildFile(filename + " D2D").withFileExtension("png");
+
+    if (gdiFile.existsAsFile() && d2dFile.existsAsFile())
+    {
+        sourceImage1 = {};
+        sourceImage2 = {};
+        juce::ImageCache::releaseUnusedImages();
+
+        sourceImage1 = juce::ImageCache::getFromFile(gdiFile);
+        sourceImage2 = juce::ImageCache::getFromFile(d2dFile);
+
+        compareTask.problemAreas.clear();
+        listBox.updateContent();
+
+        compareTask.launchThread();
+    }
 }
 
 void ImageComparator::transform()
@@ -149,13 +198,11 @@ void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image 
         return;
     }
 
-    original = direct2DRendererSnapshot.createCopy();
-
-    sourceImage1 = softwareRendererSnapshot.createCopy();
-    sourceImage2 = direct2DRendererSnapshot.createCopy();
+    //sourceImage1 = softwareRendererSnapshot.createCopy();
+    //sourceImage2 = direct2DRendererSnapshot.createCopy();
 
     //compare();
-    compareTask.launchThread();
+    //compareTask.launchThread();
 }
 
 void ImageComparator::CompareTask::compare()
@@ -169,8 +216,6 @@ void ImageComparator::CompareTask::compare()
     blueComparison = juce::Image{ juce::Image::ARGB, imageComparator.sourceImage1.getWidth(), imageComparator.sourceImage1.getHeight(), true };
     greenComparison = juce::Image{ juce::Image::ARGB, imageComparator.sourceImage1.getWidth(), imageComparator.sourceImage1.getHeight(), true };
     brightnessComparison = juce::Image{ juce::Image::ARGB, imageComparator.sourceImage1.getWidth(), imageComparator.sourceImage1.getHeight(), true };
-    output1 = juce::Image{ juce::Image::ARGB, imageComparator.sourceImage1.getWidth(), imageComparator.sourceImage1.getHeight(), true };
-    output2 = juce::Image{ juce::Image::ARGB, imageComparator.sourceImage2.getWidth(), imageComparator.sourceImage2.getHeight(), true };
 
     {
         juce::Image::BitmapData softwareRendererSnapshotData{ imageComparator.sourceImage1, juce::Image::BitmapData::readOnly };
@@ -178,9 +223,7 @@ void ImageComparator::CompareTask::compare()
         juce::Image::BitmapData redData{ redComparison, juce::Image::BitmapData::writeOnly };
         juce::Image::BitmapData greenData{ greenComparison, juce::Image::BitmapData::writeOnly };
         juce::Image::BitmapData blueData{ blueComparison, juce::Image::BitmapData::writeOnly };
-        juce::Image::BitmapData alphaData{ brightnessComparison, juce::Image::BitmapData::writeOnly };
-        juce::Image::BitmapData out1Data{ output1, juce::Image::BitmapData::writeOnly };
-        juce::Image::BitmapData out2Data{ output2, juce::Image::BitmapData::writeOnly };
+        juce::Image::BitmapData brightnessData{ brightnessComparison, juce::Image::BitmapData::writeOnly };
 
         uint8_t constexpr zero = 0;
         float constexpr scale = 255.0f;
@@ -218,14 +261,8 @@ void ImageComparator::CompareTask::compare()
                 }
 
                 {
-                    auto brightnessDelta = std::abs(c1.getPerceivedBrightness() - c2.getPerceivedBrightness());
                     auto c = std::abs(c1.getPerceivedBrightness() - c2.getPerceivedBrightness());
-                    alphaData.setPixelColour(x, y, juce::Colour::greyLevel(c));
-
-                    auto o1 = juce::jmax(0.0f, c - c1.getPerceivedBrightness());
-                    out1Data.setPixelColour(x, y, juce::Colour::greyLevel(o1));
-                    auto o2 = juce::jmax(0.0f, c - c2.getPerceivedBrightness());
-                    out2Data.setPixelColour(x, y, juce::Colour::greyLevel(o2));
+                    brightnessData.setPixelColour(x, y, juce::Colour::greyLevel(c));
                 }
 
             }
@@ -233,9 +270,18 @@ void ImageComparator::CompareTask::compare()
     }
 
     findProblemAreas();
-    scoreProblemAreas(imageComparator.sourceImage1, imageComparator.sourceImage2);
-    //scoreProblemAreas(imageComparator.sourceImage2, output2);
 
+    {
+        juce::Graphics g{ problemImage };
+        g.setColour(juce::Colours::cyan);
+        for (auto const& pa : problemAreas)
+        {
+            g.drawRect(pa.area);
+        }
+
+    }
+    
+    scoreProblemAreas(imageComparator.sourceImage1, imageComparator.sourceImage2);
 }
 
 void ImageComparator::compare(juce::Component& sourceComponent)
@@ -258,6 +304,90 @@ void ImageComparator::compare(juce::Component& sourceComponent)
     compare(softwareImage, nativeImage);
 }
 
+void ImageComparator::compare(juce::File mainDirectory_)
+{
+    mainDirectory = mainDirectory_;
+
+    folders = mainDirectory_.findChildFiles(juce::File::findDirectories, false);
+    
+    folderCombo.clear();
+    int id = 1;
+    for (const auto& folder : folders)
+    {
+        folderCombo.addItem(folder.getFileName(), id++);
+    }
+
+    folderCombo.setSelectedId(id - 1);
+
+    updateFileCombo();
+}
+
+int ImageComparator::getNumRows()
+{
+    juce::ScopedLock locker{ compareTask.lock };
+    if (compareTask.isThreadRunning())
+    {
+        return 0;
+    }
+
+    return (int)compareTask.problemAreas.size();
+}
+
+void ImageComparator::paintListBoxItem(int rowNumber, juce::Graphics& g, int width, int height, bool rowIsSelected)
+{
+    juce::ScopedLock locker{ compareTask.lock };
+    if (compareTask.isThreadRunning())
+    {
+        return;
+    }
+
+    if (rowIsSelected)
+    {
+        g.setColour(juce::Colours::darkgrey);
+        g.fillRect(0, 0, width, height);
+    }
+
+    auto const& problemArea = compareTask.problemAreas[rowNumber];
+    juce::String line = problemArea.area.toString();
+    g.setColour(juce::Colours::white);
+    juce::Rectangle<int> r{ 0, 0, width, height };
+    auto topR = r.removeFromTop(height / 2);
+    auto bottomR = r;
+    g.drawText(line, topR.withWidth(width / 2), juce::Justification::centredLeft);
+
+    g.setColour(juce::Colours::white);
+    g.drawRect(0, 0, width, height);
+    if (problemArea.getScore() > 2.0f)
+    {
+        g.setColour(juce::Colours::red);
+        g.setFont(g.getCurrentFont().boldened());
+    }
+    g.drawText(juce::String{ problemArea.getScore(), 3 }, topR.removeFromRight(width / 2), juce::Justification::centredLeft);
+    
+    line = juce::String{ problemArea.scores[0].channels[4].rms, 3 };
+    line << " " << juce::String{ problemArea.scores[1].channels[4].rms, 3 };
+    g.drawText(line, bottomR, juce::Justification::centredLeft);
+
+}
+
+void ImageComparator::listBoxItemClicked(int row, const juce::MouseEvent&)
+{
+    if (lastRow == row && lastRow >= 0)
+    {
+        listBox.deselectAllRows();
+        lastRow = -1;
+    }
+    else
+    {
+        lastRow = row;
+    }
+}
+
+void ImageComparator::selectedRowsChanged(int)
+{
+    repaint();
+}
+
 void ImageComparator::CompareTask::findProblemAreas()
 {
     setStatusMessage("Finding problem areas...");
@@ -275,8 +405,20 @@ void ImageComparator::CompareTask::findProblemAreas()
 
     problemImage = juce::Image{ juce::SoftwareImageType{}.create(juce::Image::ARGB, brightnessData.width, brightnessData.height, true) };
     problemImage.clear(problemImage.getBounds(), juce::Colours::black);
+    juce::Image::BitmapData problemData{ problemImage, juce::Image::BitmapData::writeOnly };
 
     problemAreas.clear();
+
+    auto fillProblemArea = [&](juce::Rectangle<int> fillR)
+        {
+            for (int x = fillR.getX(); x < fillR.getRight(); ++x)
+            {
+                for (int y = fillR.getY(); y < fillR.getBottom(); ++y)
+                {
+                    problemData.setPixelColour(x, y, juce::Colours::pink.withAlpha(0.25f));
+                }
+            }
+        };
 
     for (int sourceX = 0; sourceX < brightnessData.width; ++sourceX)
     {
@@ -292,6 +434,10 @@ void ImageComparator::CompareTask::findProblemAreas()
         {
             auto level = brightnessData.getPixelColour(sourceX, sourceY).getRed(); // red, green, and blue are all the same
             if (level == 0)
+            {
+                continue;
+            }
+            if (problemData.getPixelColour(sourceX, sourceY).getRed() > 0)
             {
                 continue;
             }
@@ -333,15 +479,7 @@ void ImageComparator::CompareTask::findProblemAreas()
             juce::Rectangle<int> r{ sourceX, sourceY, width, height };
             r = r.getIntersection(brightnessData.getBounds());
 
-            {
-                for (int x = r.getX(); x < r.getRight(); ++x)
-                {
-                    for (int y = r.getY(); y < r.getBottom(); ++y)
-                    {
-                        problemImage.setPixelAt(x, y, juce::Colours::pink.withAlpha(0.25f));
-                    }
-                }
-            }
+            fillProblemArea(r);
 
             auto expandedR = r.expanded(1).getIntersection(problemImage.getBounds());
             bool intersection = false;
@@ -371,14 +509,16 @@ void ImageComparator::CompareTask::findProblemAreas()
                     }
                 }
 
+                juce::ScopedLock locker{ lock };
                 bool added = false;
                 if (intersection)
                 {
                     for (auto& problemArea : problemAreas)
                     {
-                        if (problemArea.intersects(expandedR))
+                        if (problemArea.area.intersects(expandedR))
                         {
-                            problemArea = problemArea.getUnion(r);
+                            problemArea.area = problemArea.area.getUnion(r);
+                            fillProblemArea(problemArea.area);
                             added = true;
                             break;
                         }
@@ -387,23 +527,19 @@ void ImageComparator::CompareTask::findProblemAreas()
 
                 if (!added)
                 {
-                    problemAreas.add(r);
+                    problemAreas.emplace_back(ProblemArea{ r, {} });
+                    fillProblemArea(r);
                 }
+
+                juce::MessageManager::callAsync([this] { imageComparator.repaint(); });
             }
         }
-    }
 
-    {
-        //juce::Graphics g{ problemImage };
-
-        for (auto& problemArea : problemAreas)
-        {
-            //g.setColour(juce::Colours::cyan);
-            //g.drawRect(problemArea);
-        }
     }
 }
 
+
+/*
 void ImageComparator::CompareTask::scoreProblemAreas()
 {
     problemImage = brightnessComparison.createCopy();
@@ -414,10 +550,9 @@ void ImageComparator::CompareTask::scoreProblemAreas()
     setStatusMessage("Scoring problem areas...");
     double currentProgress = 0.0;
 
-    scores.clear();
-
-    for (auto area : problemAreas)
+    for (auto& problemArea : problemAreas)
     {
+        auto area = problemArea.first;
         setProgress(currentProgress);
         currentProgress += 1.0 / (double)problemAreas.size();
 
@@ -438,7 +573,8 @@ void ImageComparator::CompareTask::scoreProblemAreas()
 
         areaRMS /= area.getWidth() * area.getHeight();
         areaRMS = std::sqrt(areaRMS);
-        scores.add(areaRMS);
+
+        problemArea = { area, areaRMS };
 
         g.setColour(juce::Colours::cyan);
         g.drawRect(area);
@@ -448,46 +584,53 @@ void ImageComparator::CompareTask::scoreProblemAreas()
 
     scores.sort();
 }
+*/
 
 void ImageComparator::CompareTask::scoreProblemAreas(juce::Image& sourceImage, juce::Image& sourceImage2)
 {
-    {
-        juce::Graphics g{ output1 };
+    setStatusMessage("Scoring problem areas...");
 
-        g.setColour(juce::Colours::black);
-        g.fillAll();
-
-        //g.setOpacity(0.5f);
-        //g.drawImageAt(sourceImage, 0, 0);
-    }
-
-    juce::Array<float> scores;
-
-    auto calcRMS = [&](juce::Rectangle<int> area, juce::Image::BitmapData& data)
+    auto calc = [&](juce::Rectangle<int> area, juce::Image::BitmapData& data) -> Score
         {
-            auto areaRMS = 0.0f;
+            Score score;
+            float divisorInverse = 1.0f / ((float)sourceImage.getWidth() * (float)sourceImage.getHeight());
+
+            auto calcChannel = [&](int channel, float value)
+                {
+                    auto& channelScore = score.channels[channel];
+                    channelScore.rms += value * value;
+                    channelScore.total += value;
+                };
+
             for (int x = area.getX(); x < area.getRight(); ++x)
             {
                 for (int y = area.getY(); y < area.getBottom(); ++y)
                 {
-                    auto level = data.getPixelColour(x, y).getRed(); // red, green, and blue are all the same
-                    areaRMS += level * level;
+                    calcChannel(0, data.getPixelColour(x, y).getFloatRed());
+                    calcChannel(1, data.getPixelColour(x, y).getFloatBlue());
+                    calcChannel(2, data.getPixelColour(x, y).getFloatGreen());
+                    calcChannel(3, data.getPixelColour(x, y).getFloatAlpha());
+                    calcChannel(4, data.getPixelColour(x, y).getPerceivedBrightness());
                 }
             }
 
-            areaRMS /= area.getWidth() * area.getHeight();
-            areaRMS = std::sqrt(areaRMS);
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                auto& rms = score.channels[channel].rms;
+                rms = std::sqrt(rms * divisorInverse);
+            }
 
-            return areaRMS;
+            return score;
         };
 
     {
         juce::Image::BitmapData sourceData{ sourceImage, juce::Image::BitmapData::readOnly };
-        juce::Image::BitmapData source2Data{ sourceImage2, juce::Image::BitmapData::writeOnly };
+        juce::Image::BitmapData source2Data{ sourceImage2, juce::Image::BitmapData::readOnly };
         double currentProgress = 0.0;
 
-        for (auto area : problemAreas)
+        for (auto& problemArea : problemAreas)
         {
+            auto area = problemArea.area;
             setProgress(currentProgress);
             currentProgress += 1.0 / (double)problemAreas.size();
 
@@ -496,23 +639,29 @@ void ImageComparator::CompareTask::scoreProblemAreas(juce::Image& sourceImage, j
                 return;
             }
 
-            auto rms1 = calcRMS(area, sourceData);
-            auto rms2 = calcRMS(area, source2Data);
+            auto score1 = calc(area, sourceData);
+            auto score2 = calc(area, source2Data);
 
-            scores.add(std::abs(rms1 - rms2));
+            problemArea.area = area;
+            problemArea.scores[0] = score1;
+            problemArea.scores[1] = score2;
         }
     }
 
-    {
-        juce::Graphics g{ output1 };
-        g.setOpacity(0.5f);
-        g.drawImageAt(imageComparator.sourceImage1, 0, 0);
-        g.setOpacity(1.0f);
+     std::sort(problemAreas.begin(), problemAreas.end(),
+         [](const ProblemArea& a, const ProblemArea& b)
+         {
+             return a.getScore() > b.getScore();
+         });
 
-        int index = 0;
-        for (auto area : problemAreas)
+#if 0
+    juceGraphics g{ output1 };
+        g.drawImageAt(imageComparator.sourceImage1, 0, 0);
+
+        for (auto const& problemArea : problemAreas)
         {
-            auto score = scores[index++];
+            auto area = problemArea.first;
+            auto score = problemArea.second;
             if (score < 15.0f || area.getWidth() < 5 || area.getHeight() < 5)
             {
                 continue;
@@ -528,14 +677,12 @@ void ImageComparator::CompareTask::scoreProblemAreas(juce::Image& sourceImage, j
 
     {
         juce::Graphics g{ output2 };
-        g.setOpacity(0.5f);
         g.drawImageAt(imageComparator.sourceImage2, 0, 0);
-        g.setOpacity(1.0f);
 
-        int index = 0;
-        for (auto area : problemAreas)
+        for (auto const& problemArea : problemAreas)
         {
-            auto score = scores[index++];
+            auto area = problemArea.first;
+            auto score = problemArea.second;
             if (score < 15.0f || area.getWidth() < 5 || area.getHeight() < 5)
             {
                 continue;
@@ -548,4 +695,28 @@ void ImageComparator::CompareTask::scoreProblemAreas(juce::Image& sourceImage, j
             g.drawEllipse(area.toFloat().withSizeKeepingCentre(32.0f, 32.0f), 2.0f);
         }
     }
+#endif
+}
+
+float ImageComparator::CompareTask::ProblemArea::getScore() const
+{
+    double maxDelta = 0.0;
+    double maxValue = 0.0;
+    for (int channel = 0; channel < 5; ++channel)
+    {
+        auto delta = std::abs(scores[0].channels[channel].rms - scores[1].channels[channel].rms);
+        if (delta > maxDelta)
+        {
+            maxDelta = delta;
+            maxValue = juce::jmax(maxValue, scores[0].channels[channel].rms);
+            maxValue = juce::jmax(maxValue, scores[1].channels[channel].rms);
+        }
+    }
+
+    if (maxDelta == 0.0)
+    {
+        return 0.0f;
+    }
+
+    return (float)std::log10(maxDelta);
 }
