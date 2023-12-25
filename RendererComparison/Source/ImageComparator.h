@@ -1,5 +1,7 @@
 #pragma once
 
+#include <d2d1_2.h>
+#include <d2d1effects_2.h>
 #include <JuceHeader.h>
 #include "RenderTestComponent.h"
 
@@ -83,6 +85,7 @@ private:
         juce::Image greenComparison;
         juce::Image blueComparison;
         juce::Image brightnessComparison;
+        juce::Image edges;
 
         juce::Image problemImage;
 
@@ -98,6 +101,11 @@ private:
         std::vector <ProblemArea> problemAreas;
 
     } compareTask;
+
+    juce::Image applyEdgeDetect(juce::Image const& source);
+    juce::Image applyGammaEffect(juce::Image const& source);
+    juce::Image applyMorphologyEffect(juce::Image const& source);
+    juce::Image applyBrightnessEffect(juce::Image const& source);
        
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ImageComparator)
 };

@@ -42,15 +42,15 @@ void ImageComparator::paint(juce::Graphics& g)
     }
 
     juce::Image* images[] = { &sourceImage1,
-        &sourceImage2
-        /*&compareTask.brightnessComparison,
-        &compareTask.problemImage*/
+        &sourceImage2,
+        &compareTask.brightnessComparison
+        /*&compareTask.edges,*/
         /*,
         &compareTask.redComparison,
         &compareTask.greenComparison,
         &compareTask.blueComparison, */
         /*,&compareTask.brightnessComparison */ };
-    juce::Rectangle<int> r{ listBox.getRight(), 0, (getWidth() - listBox.getWidth()) / 2, getHeight() / 1}, lastR;
+    juce::Rectangle<int> r{ listBox.getRight(), 0, (getWidth() - listBox.getWidth()) / 3, getHeight() / 1}, lastR;
     for (auto const& image : images)
     {
         if (image->isValid())
@@ -190,6 +190,128 @@ void ImageComparator::transform()
     */
 }
 
+juce::Image ImageComparator::applyEdgeDetect(juce::Image const& source)
+{
+    auto clone = source.createCopy();
+
+    juce::Uuid uuid = (const uint8_t*)&CLSID_D2D1EdgeDetection;
+    juce::Array<juce::var> values;
+
+    auto addValue = [&](int index, juce::var value)
+        {
+            juce::DynamicObject::Ptr object = new juce::DynamicObject;
+            object->setProperty("Index", index);
+            object->setProperty("Value", value);
+            values.add(juce::var{ object.get() });
+        };
+
+    addValue(D2D1_EDGEDETECTION_PROP_STRENGTH, 1.0f);
+    addValue(D2D1_EDGEDETECTION_PROP_BLUR_RADIUS, 1.0f);
+    addValue(D2D1_EDGEDETECTION_PROP_MODE, D2D1_EDGEDETECTION_MODE_PREWITT);
+    addValue(D2D1_EDGEDETECTION_PROP_OVERLAY_EDGES, false);
+    addValue(D2D1_EDGEDETECTION_PROP_ALPHA_MODE, D2D1_ALPHA_MODE_PREMULTIPLIED);
+
+    clone.getProperties()->set("Direct2DEffectCLSID", uuid.toString());
+    clone.getProperties()->set("Direct2DEffectValues", values);
+
+    juce::Image output{ clone.getFormat(), clone.getWidth(), clone.getHeight(), false };
+    {
+        juce::Graphics g{ output };
+        g.drawImageAt(clone, 0, 0);
+    }
+    return output;
+}
+
+juce::Image ImageComparator::applyGammaEffect(juce::Image const& source)
+{
+    auto clone = source.createCopy();
+
+    juce::Uuid uuid = (const uint8_t*)&CLSID_D2D1GammaTransfer;
+    juce::Array<juce::var> values;
+
+    auto addValue = [&](int index, juce::var value)
+        {
+            juce::DynamicObject::Ptr object = new juce::DynamicObject;
+            object->setProperty("Index", index);
+            object->setProperty("Value", value);
+            values.add(juce::var{ object.get() });
+        };
+
+     addValue(D2D1_GAMMATRANSFER_PROP_RED_AMPLITUDE, 0.8f);
+     addValue(D2D1_GAMMATRANSFER_PROP_GREEN_AMPLITUDE, 0.8f);
+     addValue(D2D1_GAMMATRANSFER_PROP_BLUE_AMPLITUDE, 0.8f);
+
+    clone.getProperties()->set("Direct2DEffectCLSID", uuid.toString());
+    clone.getProperties()->set("Direct2DEffectValues", values);
+
+    juce::Image output{ clone.getFormat(), clone.getWidth(), clone.getHeight(), false };
+    {
+        juce::Graphics g{ output };
+        g.drawImageAt(clone, 0, 0);
+    }
+    return output;
+}
+
+juce::Image ImageComparator::applyMorphologyEffect(juce::Image const& source)
+{
+    auto clone = source.createCopy();
+
+    juce::Uuid uuid = (const uint8_t*)&CLSID_D2D1Morphology;
+    juce::Array<juce::var> values;
+
+    auto addValue = [&](int index, juce::var value)
+        {
+            juce::DynamicObject::Ptr object = new juce::DynamicObject;
+            object->setProperty("Index", index);
+            object->setProperty("Value", value);
+            values.add(juce::var{ object.get() });
+        };
+
+    addValue(D2D1_MORPHOLOGY_PROP_MODE, D2D1_MORPHOLOGY_MODE_DILATE);
+    addValue(D2D1_MORPHOLOGY_PROP_WIDTH, 2);
+    addValue(D2D1_MORPHOLOGY_PROP_HEIGHT, 2);
+
+    clone.getProperties()->set("Direct2DEffectCLSID", uuid.toString());
+    clone.getProperties()->set("Direct2DEffectValues", values);
+
+    juce::Image output{ clone.getFormat(), clone.getWidth(), clone.getHeight(), false };
+    {
+        juce::Graphics g{ output };
+        g.drawImageAt(clone, 0, 0);
+    }
+    return output; 
+}
+
+juce::Image ImageComparator::applyBrightnessEffect(juce::Image const& source)
+{
+#if 0
+    auto clone = source.createCopy();
+
+    juce::Uuid uuid = (const uint8_t*)&CLSID_D2D1Brightness;
+    juce::Array<juce::var> values;
+
+    auto addValue = [&](int index, juce::var value)
+        {
+            juce::DynamicObject::Ptr object = new juce::DynamicObject;
+            object->setProperty("Index", index);
+            object->setProperty("Value", value);
+            values.add(juce::var{ object.get() });
+        };
+
+    addValue(D2D1_BRIGHTNESS_PROP_BLACK_POINT, D2D1::Vector2F(0.0f, 0.2f));
+
+    clone.getProperties()->set("Direct2DEffectCLSID", uuid.toString());
+    clone.getProperties()->set("Direct2DEffectValues", values);
+
+    juce::Image output{ clone.getFormat(), clone.getWidth(), clone.getHeight(), false };
+    {
+        juce::Graphics g{ output };
+        g.drawImageAt(clone, 0, 0);
+    }
+    return output;
+#endif
+    return {};
+}
 
 void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image direct2DRendererSnapshot)
 {
@@ -261,13 +383,45 @@ void ImageComparator::CompareTask::compare()
                 }
 
                 {
-                    auto c = std::abs(c1.getPerceivedBrightness() - c2.getPerceivedBrightness());
+                    auto b1 = c1.getPerceivedBrightness();
+                    auto b2 = c2.getPerceivedBrightness();
+                    auto c = juce::jlimit(0.0f, 1.0f, std::abs(b1 - b2));
                     brightnessData.setPixelColour(x, y, juce::Colour::greyLevel(c));
                 }
-
             }
         }
     }
+
+#if 0
+    {
+        edges = juce::Image{ juce::Image::ARGB, brightnessComparison.getWidth(), brightnessComparison.getHeight(), true };
+
+        juce::Uuid uuid = (const uint8_t*)&CLSID_D2D1EdgeDetection;
+        juce::Array<juce::var> values;
+
+        auto addValue = [&](int index, juce::var value)
+            {
+                juce::DynamicObject::Ptr object = new juce::DynamicObject;
+                object->setProperty("Index", index);
+                object->setProperty("Value", value);
+                values.add(juce::var{ object.get() });
+            };
+
+        addValue(D2D1_EDGEDETECTION_PROP_STRENGTH, 1.0f);
+        addValue(D2D1_EDGEDETECTION_PROP_BLUR_RADIUS, 1.0f);
+        addValue(D2D1_EDGEDETECTION_PROP_MODE, D2D1_EDGEDETECTION_MODE_SOBEL);
+        addValue(D2D1_EDGEDETECTION_PROP_OVERLAY_EDGES, false);
+        addValue(D2D1_EDGEDETECTION_PROP_ALPHA_MODE, D2D1_ALPHA_MODE_PREMULTIPLIED);
+
+        brightnessComparison.getProperties()->set("Direct2DEffectCLSID", uuid.toString());
+        brightnessComparison.getProperties()->set("Direct2DEffectValues", values);
+
+        {
+            juce::Graphics g{ edges };
+            g.drawImageAt(brightnessComparison, 0, 0);
+        }
+    }
+#endif
 
     findProblemAreas();
 
