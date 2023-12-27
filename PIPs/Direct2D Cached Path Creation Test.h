@@ -26,29 +26,35 @@ class CachedPathCreationTest : public juce::Component
 public:
     CachedPathCreationTest()
     {
-        addAndMakeVisible(transformToggle);
-        transformToggle.onClick = [this]
-            {
-                transformCombo.setEnabled(transformToggle.getToggleState());
-            };
-
-        pathSegmentCountSlider.setRange({ 100.0f, 100000.0f }, 1.0);
-        pathSegmentCountSlider.setValue(100.0f, juce::dontSendNotification);
+        addAndMakeVisible(pathSegmentCountLabel);
+        pathSegmentCountSlider.setRange({ 4.0, 100000.0 }, 1.0);
+        pathSegmentCountSlider.setValue(100.0, juce::dontSendNotification);
         addAndMakeVisible(pathSegmentCountSlider);
-        pathSegmentCountSlider.onValueChange = [this] { createPath(); };
+        pathSegmentCountSlider.setSkewFactor(0.25);
+        pathSegmentCountSlider.onDragEnd = [this] { createPath(); };
 
-        strokeThicknessSlider.setRange({ 1.0f, 50.0f }, 0.01);
-        strokeThicknessSlider.setValue(5.0f, juce::dontSendNotification);
+        addAndMakeVisible(originalPathSizeLabel);
+        originalPathSizeSlider.setRange({ 1.0, 2000.0 }, 1.0);
+        originalPathSizeSlider.setValue(10.0, juce::dontSendNotification);
+        addAndMakeVisible(originalPathSizeSlider);
+        originalPathSizeSlider.onValueChange = [this] { createPath(); };
+
+        addAndMakeVisible(transformScaleLabel);
+        yScaleSlider.setRange({ 0.1, 1000.0 }, 0.1);
+        yScaleSlider.setValue(1.0, juce::dontSendNotification);
+        addAndMakeVisible(yScaleSlider);
+        yScaleSlider.onValueChange = [this] { repaint(); };
+
+        xScaleSlider.setRange({ 0.1, 1000.0 }, 0.1);
+        xScaleSlider.setValue(1.0, juce::dontSendNotification);
+        addAndMakeVisible(xScaleSlider);
+        xScaleSlider.onValueChange = [this] { repaint(); };
+
+        addAndMakeVisible(strokeThicknessLabel);
+        strokeThicknessSlider.setRange({ 1.0, 50.0 }, 0.01);
+        strokeThicknessSlider.setValue(1.0, juce::dontSendNotification);
         addAndMakeVisible(strokeThicknessSlider);
         strokeThicknessSlider.onValueChange = [this] { repaint(); };
-
-        transformCombo.addItem("Translate", TransformType::translate);
-        transformCombo.addItem("Scale", TransformType::scale);
-        transformCombo.addItem("Shear", TransformType::shear);
-        transformCombo.addItem("Rotate", TransformType::rotate);
-        addAndMakeVisible(transformCombo);
-        transformCombo.setSelectedId(TransformType::translate, juce::dontSendNotification);
-        transformCombo.setEnabled(false);
 
         modeCombo.onChange = [this]
             {
@@ -69,18 +75,25 @@ public:
 
     void resized() override
     {
-        juce::Rectangle<int> r{ 10, 10, 250, 30 };
-        modeCombo.setBounds(r);
+        {
+            modeCombo.setBounds(getWidth() - 130, 10, 120, 30);
 
-        r.translate(0, 40);
-        transformToggle.setBounds(r.withWidth(100));
-        transformCombo.setBounds(transformToggle.getBounds().translated(transformToggle.getWidth(), 0));
+            juce::Rectangle<int> r{ getWidth() - 300, modeCombo.getBottom() + 5, 120, 30 };
+            originalPathSizeLabel.setBounds(r.withWidth(120));
+            originalPathSizeSlider.setBounds(r.withX(originalPathSizeLabel.getRight()).withWidth(getWidth() - originalPathSizeLabel.getRight()));
 
-        r.translate(0, 40);
-        pathSegmentCountSlider.setBounds(r);
+            r.translate(0, 30);
+            pathSegmentCountLabel.setBounds(r.withWidth(120));
+            pathSegmentCountSlider.setBounds(r.withX(pathSegmentCountLabel.getRight()).withWidth(getWidth() - pathSegmentCountLabel.getRight()));
 
-        r.translate(0, 40);
-        strokeThicknessSlider.setBounds(r);
+            r.translate(0, 30);
+            strokeThicknessLabel.setBounds(r.withWidth(120));
+            strokeThicknessSlider.setBounds(r.withX(strokeThicknessLabel.getRight()).withWidth(getWidth() - strokeThicknessLabel.getRight()));
+        }
+        
+        transformScaleLabel.setBounds(0, getHeight() - 30, 50, 30);
+        yScaleSlider.setBounds(0, 0, 50, transformScaleLabel.getY());
+        xScaleSlider.setBounds(transformScaleLabel.getRight(), transformScaleLabel.getY(), getWidth() - transformScaleLabel.getRight(), transformScaleLabel.getHeight());
 
         createPath();
     }
@@ -89,21 +102,18 @@ public:
     {
         g.fillAll(juce::Colours::black);
 
-        juce::AffineTransform transform;
-        if (transformToggle.getToggleState())
-        {
-            transform = animatedTransform;
-        }
-
         //
         // Fill or stroke the Path member variable to take advantage of
         // geometry caching
         //
+        auto xScale = (float)xScaleSlider.getValue();
+        auto yScale = (float)yScaleSlider.getValue();
+        auto transform = juce::AffineTransform::scale(xScale, yScale).translated(getWidth() * 0.5f, getHeight() * 0.5f);
         switch (modeCombo.getSelectedId())
         {
         case Mode::fillPath:
         {
-            g.setColour(juce::Colours::aquamarine);
+            g.setColour(juce::Colours::orchid);
             g.fillPath(cachedPath, transform);
             break;
         }
@@ -111,12 +121,13 @@ public:
         case Mode::strokePath:
         {
             auto strokeType = createStrokeType();
-            g.setColour(juce::Colours::aquamarine);
+            g.setColour(juce::Colours::red);
             g.strokePath(cachedPath, strokeType, transform);
             break;
         }
         }
 
+#if 0
         g.setColour(juce::Colours::white);
         juce::Rectangle<int> textR = getLocalBounds().removeFromBottom(75).reduced(20, 0).withHeight(25);
 
@@ -143,50 +154,7 @@ public:
         printStat(cachedPath.geometryCreationTime, "Geometry creation: ");
         printStat(cachedPath.filledGeometryRealizationCreationTime, "Filled geometry creation: ");
         printStat(cachedPath.strokedGeometryRealizationCreationTime, "Stroked geometry creation: ");
-    }
-
-    void animate()
-    {
-        if (transformToggle.getToggleState() == false)
-        {
-            return;
-        }
-
-        auto now = juce::Time::getMillisecondCounterHiRes();
-        auto elapsedSeconds = (now - lastMsec) * 0.001;
-        lastMsec = now;
-
-        {
-            auto nextPhase = phase + elapsedSeconds * juce::MathConstants<double>::twoPi * 0.2;
-             while (nextPhase >= juce::MathConstants<double>::twoPi)
-                 nextPhase -= juce::MathConstants<double>::twoPi;
-
-            phase = nextPhase;
-        }
-
-        auto position = (float)std::sin(phase);
-        auto clampedPosition = juce::jlimit(0.0f, 1.0f, position * 0.5f + 0.5f);
-        auto center = getLocalBounds().getCentre().toFloat();
-        switch (transformCombo.getSelectedId())
-        {
-        case TransformType::scale:
-            animatedTransform = juce::AffineTransform::scale(clampedPosition, clampedPosition, center.x, center.y);
-            break;
-
-        case TransformType::translate:
-            animatedTransform = juce::AffineTransform::translation(position * 50.0f, position * 50.0f);
-            break;
-
-        case TransformType::shear:
-            animatedTransform = juce::AffineTransform::shear(position * 0.5f, position * 0.5f);
-            break;
-
-        case TransformType::rotate:
-            animatedTransform = juce::AffineTransform::rotation((float)phase, center.x, center.y);
-            break;
-        }
-
-        repaint();
+#endif
     }
 
     void parentHierarchyChanged() override
@@ -204,24 +172,16 @@ private:
         strokePath
     };
 
-    enum TransformType
-    {
-        scale = 1,
-        translate,
-        shear,
-        rotate
-    };
-
-    juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
-    double lastMsec = juce::Time::getMillisecondCounterHiRes();
-    juce::AffineTransform animatedTransform;
-    double phase = 0.0;
-
     juce::ComboBox modeCombo;
-    juce::ToggleButton transformToggle{ "Transform" };
-    juce::ComboBox transformCombo;
+    juce::Label pathSegmentCountLabel{ {}, "Path segments" };
+    juce::Label strokeThicknessLabel{ {}, "Stroke thickness" };
+    juce::Label originalPathSizeLabel{ {}, "Path original size" };
+    juce::Label transformScaleLabel{ {}, "Scale" };
     juce::Slider pathSegmentCountSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider strokeThicknessSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Slider originalPathSizeSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Slider xScaleSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxLeft };
+    juce::Slider yScaleSlider{ juce::Slider::LinearVertical, juce::Slider::TextBoxBelow };
 
     //
     // Direct2D resources are generally more expensive to create than they are to draw.
@@ -236,43 +196,17 @@ private:
 
     void createPath()
     {
-        cachedPath.clear();
-        auto area = getLocalBounds().toFloat();
-        if (area.isEmpty())
+        if (getLocalBounds().isEmpty())
         {
             return;
         }
 
-        int numCycles = 1.0f;
-        float numSegments = (float)pathSegmentCountSlider.getValue() * 0.5f;
-        float pixelsPerSegment = area.getWidth() / numSegments;
-        float phasePerSegment = (numCycles * juce::MathConstants<float>::twoPi) / numSegments;
-        float upperY = 100.0f + area.getCentreY();
-        float amplitude = 50.0f;
-
-        cachedPath.startNewSubPath(0.0f, upperY);
-        float angle = 0.0f;
-        float x = pixelsPerSegment;
-        for (; x < area.getWidth(); x += pixelsPerSegment)
-        {
-            float y = amplitude * std::sin(angle * juce::MathConstants<float>::twoPi);
-            y += upperY;
-            cachedPath.lineTo(x, y);
-            angle += phasePerSegment;
-        }
-
-        float lowerY = area.getCentreY() - 100.0f;
-        x -= pixelsPerSegment;
-        angle -= phasePerSegment;
-        for (; x > 0.0f; x -= pixelsPerSegment)
-        {
-            float y = amplitude * std::sin(angle * juce::MathConstants<float>::twoPi);
-            y += lowerY;
-            cachedPath.lineTo(x, y);
-            angle -= phasePerSegment;
-        }
-
-        cachedPath.closeSubPath();
+        cachedPath.clear();
+        float size = (float)originalPathSizeSlider.getValue();
+        auto area = getLocalBounds().toFloat().withSizeKeepingCentre(size, size).withPosition(-size * 0.5f, -size * 0.5f);
+        cachedPath.addStar(area.getCentre(), (int)pathSegmentCountSlider.getValue(),
+            size * 0.445f,
+            size * 0.455f);
 
         repaint();
     }
