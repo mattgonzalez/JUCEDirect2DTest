@@ -10,7 +10,7 @@
   exporters:        VS2022
 
   moduleFlags:      JUCE_STRICT_REFCOUNTEDPOINTER=1
-  defines:
+  defines:          
 
   type:             Component
   mainClass:        Particles
@@ -216,7 +216,7 @@ public:
         }
 
         {
-            g.setColour(juce::Colours::black);
+            g.setColour(Colours::black);
             std::array<Component*, 2> components{ &spriteCountLabel, &spriteCountSlider };
             for (auto component : components)
             {
@@ -240,8 +240,8 @@ public:
     }
 
 private:
-    juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
-    double lastMsec = juce::Time::getMillisecondCounterHiRes();
+    VBlankAttachment attachment{ this, [this]() { animate(); } };
+    double lastMsec = Time::getMillisecondCounterHiRes();
     
     Path starPath;
     Path circlePath;
