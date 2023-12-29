@@ -10,7 +10,7 @@
   exporters:        VS2022
 
   moduleFlags:      JUCE_STRICT_REFCOUNTEDPOINTER=1
-  defines:
+  defines:          JUCE_DIRECT2D_METRICS=1
 
   type:             Component
   mainClass:        CachedPathCreationTest
@@ -28,14 +28,14 @@ public:
     {
         addAndMakeVisible(pathSegmentCountLabel);
         pathSegmentCountSlider.setRange({ 4.0, 100000.0 }, 1.0);
-        pathSegmentCountSlider.setValue(100.0, juce::dontSendNotification);
+        pathSegmentCountSlider.setValue(1000.0, juce::dontSendNotification);
         addAndMakeVisible(pathSegmentCountSlider);
         pathSegmentCountSlider.setSkewFactor(0.25);
-        pathSegmentCountSlider.onDragEnd = [this] { createPath(); };
+        pathSegmentCountSlider.onValueChange = [this] { createPath(); };
 
         addAndMakeVisible(originalPathSizeLabel);
         originalPathSizeSlider.setRange({ 1.0, 2000.0 }, 1.0);
-        originalPathSizeSlider.setValue(10.0, juce::dontSendNotification);
+        originalPathSizeSlider.setValue(500.0, juce::dontSendNotification);
         addAndMakeVisible(originalPathSizeSlider);
         originalPathSizeSlider.onValueChange = [this] { createPath(); };
 
@@ -68,6 +68,14 @@ public:
         addAndMakeVisible(modeCombo);
         modeCombo.setSelectedId(Mode::strokePath, juce::sendNotificationSync);
 
+        cacheToggle.setToggleState(true, dontSendNotification);
+        addAndMakeVisible(cacheToggle);
+        cacheToggle.onClick = [this]()
+            {
+                path.setCacheEnabled(cacheToggle.getToggleState());
+                repaint();
+            };
+
         setSize(1024, 1024);
     }
 
@@ -89,6 +97,9 @@ public:
             r.translate(0, 30);
             strokeThicknessLabel.setBounds(r.withWidth(120));
             strokeThicknessSlider.setBounds(r.withX(strokeThicknessLabel.getRight()).withWidth(getWidth() - strokeThicknessLabel.getRight()));
+
+            r.translate(0, 30);
+            cacheToggle.setBounds(strokeThicknessSlider.getX(), r.getY(), 120, 30);
         }
         
         transformScaleLabel.setBounds(0, getHeight() - 30, 50, 30);
@@ -114,7 +125,7 @@ public:
         case Mode::fillPath:
         {
             g.setColour(juce::Colours::orchid);
-            g.fillPath(cachedPath, transform);
+            g.fillPath(path, transform);
             break;
         }
 
@@ -122,39 +133,15 @@ public:
         {
             auto strokeType = createStrokeType();
             g.setColour(juce::Colours::red);
-            g.strokePath(cachedPath, strokeType, transform);
+            g.strokePath(path, strokeType, transform);
             break;
         }
         }
+    }
 
-#if 0
-        g.setColour(juce::Colours::white);
-        juce::Rectangle<int> textR = getLocalBounds().removeFromBottom(75).reduced(20, 0).withHeight(25);
-
-        auto printStat = [&](juce::StatisticsAccumulator<double> const& statistics, StringRef name)
-            {
-                String line{ name };
-                line << statistics.getCount();
-                g.drawText(line, textR, juce::Justification::centredLeft);
-
-                line = "Max (msec):";
-                line << statistics.getMaxValue() * 1000.0;
-                g.drawText(line, textR.withX(250), juce::Justification::centredLeft);
-
-                line = "Avg (msec):";
-                line << statistics.getAverage() * 1000.0;
-                g.drawText(line, textR.withX(500), juce::Justification::centredLeft);
-
-                line = juce::String{ juce::CharPointer_UTF8("\xcf\x83") };
-                line << " (msec):" << statistics.getStandardDeviation();
-                g.drawText(line, textR.withX(750), juce::Justification::centredLeft);
-                textR.translate(0, textR.getHeight());
-            };
-
-        printStat(cachedPath.geometryCreationTime, "Geometry creation: ");
-        printStat(cachedPath.filledGeometryRealizationCreationTime, "Filled geometry creation: ");
-        printStat(cachedPath.strokedGeometryRealizationCreationTime, "Stroked geometry creation: ");
-#endif
+    void animate()
+    {
+        repaint();
     }
 
     void parentHierarchyChanged() override
@@ -182,6 +169,9 @@ private:
     juce::Slider originalPathSizeSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider xScaleSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxLeft };
     juce::Slider yScaleSlider{ juce::Slider::LinearVertical, juce::Slider::TextBoxBelow };
+    juce::ToggleButton cacheToggle{ "Cached" };
+    juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
+    double lastMsec = juce::Time::getMillisecondCounterHiRes();
 
     //
     // Direct2D resources are generally more expensive to create than they are to draw.
@@ -191,7 +181,9 @@ private:
     //
     // Drawing a cached geometry realization is much faster than drawing a non-cached Path.
     //
-    juce::Path cachedPath;
+    juce::Path path;
+    juce::Path strokedPath;
+    juce::Path flattenedPath;
     juce::Rectangle<int> pathPaintArea;
 
     void createPath()
@@ -201,12 +193,26 @@ private:
             return;
         }
 
-        cachedPath.clear();
+        path = {};
         float size = (float)originalPathSizeSlider.getValue();
         auto area = getLocalBounds().toFloat().withSizeKeepingCentre(size, size).withPosition(-size * 0.5f, -size * 0.5f);
-        cachedPath.addStar(area.getCentre(), (int)pathSegmentCountSlider.getValue(),
-            size * 0.445f,
-            size * 0.455f);
+
+        int numCycles = 12;
+        float angle = 0.0f;
+        float angleStep = juce::MathConstants<float>::twoPi / (float)pathSegmentCountSlider.getValue();
+        float radius = area.getWidth() * 0.5f;
+        float amplitude = radius * 0.25f;
+        path.startNewSubPath(area.getCentreX(), area.getCentreY() - radius);
+        angle += angleStep;
+
+        while (angle < juce::MathConstants<float>::twoPi)
+        {
+            auto distance = amplitude * std::sin(angle * (float)numCycles);
+            auto point = area.getCentre().getPointOnCircumference(distance + radius, angle);
+            path.lineTo(point);
+            angle += angleStep;
+        }
+        path.closeSubPath();
 
         repaint();
     }
