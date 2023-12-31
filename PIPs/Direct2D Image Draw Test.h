@@ -76,7 +76,9 @@ public:
 
         g.setImageResamplingQuality((juce::Graphics::ResamplingQuality)(resamplingQualityCombo.getSelectedId() - 1));
 
-        g.fillAll(juce::Colours::black);
+        g.fillCheckerBoard(getLocalBounds().toFloat(),
+            getWidth() * 0.1f, getHeight() * 0.1f,
+            Colours::lightgrey, Colours::darkgrey);
 
         auto mousePos = getMouseXYRelative();
         mousePos.x = juce::jlimit(imagePaintArea.getX(), imagePaintArea.getRight(), mousePos.x);
@@ -205,11 +207,29 @@ private:
     // Drawing a cached image is much faster than drawing a non-cached image.
     //
     juce::Image cachedImage;
+    juce::Image polkaDotsImage;
     juce::Rectangle<int> imagePaintArea;
 
     void createCachedImage()
     {
         imagePaintArea = getLocalBounds().reduced(100);
+
+        polkaDotsImage = juce::Image{ juce::Image::ARGB, imagePaintArea.getWidth(), imagePaintArea.getHeight(), true };
+
+        {
+            juce::Graphics g{ polkaDotsImage };
+            juce::Random random;
+
+            auto r = polkaDotsImage.getBounds().reduced(20).toFloat();
+            for (int i = 0; i < 100; ++i)
+            {
+                g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 0.5f));
+                float size = random.nextFloat() * 100.0f;
+                g.fillEllipse(random.nextFloat() * r.getWidth(),
+                    random.nextFloat() * r.getHeight(),
+                    size, size);
+            }
+        }
 
         cachedImage = juce::Image{ juce::Image::ARGB, imagePaintArea.getWidth(), imagePaintArea.getHeight(), true };
 
@@ -220,12 +240,13 @@ private:
             //
             juce::Graphics g{ cachedImage };
 
-            g.fillCheckerBoard(cachedImage.getBounds().toFloat(),
-                cachedImage.getWidth() * 0.1f, cachedImage.getHeight() * 0.1f,
-                Colours::lightgrey.withAlpha(0.5f), Colours::darkgrey.withAlpha(0.5f));
+            auto r = cachedImage.getBounds().reduced(10).toFloat();
+            g.setColour(juce::Colours::white);
+            g.fillEllipse(r.toFloat());
+            g.setColour(juce::Colours::black);
+            g.drawEllipse(r.toFloat(), 5.0f);
 
-            g.setColour(juce::Colours::aliceblue);
-            g.drawEllipse(cachedImage.getBounds().toFloat().reduced(10.0f), 5.0f);
+            g.drawImageAt(polkaDotsImage, 0, 0);
         }
 
         //
