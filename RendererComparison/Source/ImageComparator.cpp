@@ -42,15 +42,15 @@ void ImageComparator::paint(juce::Graphics& g)
     }
 
     juce::Image* images[] = { &sourceImage1,
-        &sourceImage2,
-        &compareTask.brightnessComparison
+        &sourceImage2
+        /*&compareTask.brightnessComparison*/
         /*&compareTask.edges,*/
         /*,
         &compareTask.redComparison,
         &compareTask.greenComparison,
         &compareTask.blueComparison, */
         /*,&compareTask.brightnessComparison */ };
-    juce::Rectangle<int> r{ listBox.getRight(), 0, (getWidth() - listBox.getWidth()) / 3, getHeight() / 1}, lastR;
+    juce::Rectangle<int> r{ listBox.getRight(), 0, (getWidth() - listBox.getWidth()) / 2, getHeight() / 1}, lastR;
     for (auto const& image : images)
     {
         if (image->isValid())
@@ -75,7 +75,7 @@ void ImageComparator::paint(juce::Graphics& g)
                 {
                     auto const& problemArea = *it;
 
-                    if (problemArea.getScore() > 2.0f)
+                    if (problemArea.getScore() > 0.0f)
                     {
                         juce::RectanglePlacement placement;
 
@@ -164,6 +164,9 @@ void ImageComparator::compareSelectedFilePair()
 
         sourceImage1 = juce::ImageCache::getFromFile(gdiFile);
         sourceImage2 = juce::ImageCache::getFromFile(d2dFile);
+
+        sourceImage1 = applyEdgeDetect(sourceImage1);
+        sourceImage2 = applyEdgeDetect(sourceImage2);
 
         compareTask.problemAreas.clear();
         listBox.updateContent();
@@ -320,11 +323,11 @@ void ImageComparator::compare(juce::Image softwareRendererSnapshot, juce::Image 
         return;
     }
 
-    //sourceImage1 = softwareRendererSnapshot.createCopy();
-    //sourceImage2 = direct2DRendererSnapshot.createCopy();
+    sourceImage1 = softwareRendererSnapshot.createCopy();
+    sourceImage2 = direct2DRendererSnapshot.createCopy();
 
     //compare();
-    //compareTask.launchThread();
+    compareTask.launchThread();
 }
 
 void ImageComparator::CompareTask::compare()
@@ -383,45 +386,15 @@ void ImageComparator::CompareTask::compare()
                 }
 
                 {
-                    auto b1 = c1.getPerceivedBrightness();
-                    auto b2 = c2.getPerceivedBrightness();
-                    auto c = juce::jlimit(0.0f, 1.0f, std::abs(b1 - b2));
-                    brightnessData.setPixelColour(x, y, juce::Colour::greyLevel(c));
+                    auto r = std::abs(c1.getFloatRed() - c2.getFloatRed());
+                    auto g = std::abs(c1.getFloatGreen() - c2.getFloatGreen());
+                    auto b = std::abs(c1.getFloatBlue() - c2.getFloatBlue());
+                    auto c = juce::Colour{ (uint8_t)(r * scale), (uint8_t)(g * scale), (uint8_t)(b * scale), 1.0f };
+                    brightnessData.setPixelColour(x, y, c);
                 }
             }
         }
     }
-
-#if 0
-    {
-        edges = juce::Image{ juce::Image::ARGB, brightnessComparison.getWidth(), brightnessComparison.getHeight(), true };
-
-        juce::Uuid uuid = (const uint8_t*)&CLSID_D2D1EdgeDetection;
-        juce::Array<juce::var> values;
-
-        auto addValue = [&](int index, juce::var value)
-            {
-                juce::DynamicObject::Ptr object = new juce::DynamicObject;
-                object->setProperty("Index", index);
-                object->setProperty("Value", value);
-                values.add(juce::var{ object.get() });
-            };
-
-        addValue(D2D1_EDGEDETECTION_PROP_STRENGTH, 1.0f);
-        addValue(D2D1_EDGEDETECTION_PROP_BLUR_RADIUS, 1.0f);
-        addValue(D2D1_EDGEDETECTION_PROP_MODE, D2D1_EDGEDETECTION_MODE_SOBEL);
-        addValue(D2D1_EDGEDETECTION_PROP_OVERLAY_EDGES, false);
-        addValue(D2D1_EDGEDETECTION_PROP_ALPHA_MODE, D2D1_ALPHA_MODE_PREMULTIPLIED);
-
-        brightnessComparison.getProperties()->set("Direct2DEffectCLSID", uuid.toString());
-        brightnessComparison.getProperties()->set("Direct2DEffectValues", values);
-
-        {
-            juce::Graphics g{ edges };
-            g.drawImageAt(brightnessComparison, 0, 0);
-        }
-    }
-#endif
 
     findProblemAreas();
 
@@ -432,7 +405,6 @@ void ImageComparator::CompareTask::compare()
         {
             g.drawRect(pa.area);
         }
-
     }
     
     scoreProblemAreas(imageComparator.sourceImage1, imageComparator.sourceImage2);
@@ -545,9 +517,6 @@ void ImageComparator::selectedRowsChanged(int)
 void ImageComparator::CompareTask::findProblemAreas()
 {
     setStatusMessage("Finding problem areas...");
-
-    //problemSteps.clear();
-    //problemSteps.ensureStorageAllocated(32768);
 
     juce::Image::BitmapData brightnessData{ brightnessComparison, juce::Image::BitmapData::readOnly };
 
@@ -688,7 +657,6 @@ void ImageComparator::CompareTask::findProblemAreas()
                 juce::MessageManager::callAsync([this] { imageComparator.repaint(); });
             }
         }
-
     }
 }
 
