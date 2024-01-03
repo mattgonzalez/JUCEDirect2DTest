@@ -85,6 +85,7 @@ private:
         juce::Image greenComparison;
         juce::Image blueComparison;
         juce::Image brightnessComparison;
+        juce::Image difference;
         juce::Image edges;
 
         juce::Image problemImage;
@@ -101,11 +102,6 @@ private:
         std::vector <ProblemArea> problemAreas;
 
     } compareTask;
-
-    juce::Image applyEdgeDetect(juce::Image const& source);
-    juce::Image applyGammaEffect(juce::Image const& source);
-    juce::Image applyMorphologyEffect(juce::Image const& source);
-    juce::Image applyBrightnessEffect(juce::Image const& source);
        
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ImageComparator)
 };
