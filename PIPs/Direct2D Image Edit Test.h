@@ -37,6 +37,7 @@ public:
         modeCombo.addItem("createCopy", Mode::createCopy);
         modeCombo.addItem("convertedToFormat", Mode::convertedToFormat);
         modeCombo.addItem("getClippedImage", Mode::getClippedImage);
+        modeCombo.addItem("Clip copy and convert", Mode::clipCopyAndConvert);
         addAndMakeVisible(modeCombo);
         modeCombo.setSelectedId(Mode::clear, juce::dontSendNotification);
         modeCombo.onChange = [this]
@@ -112,7 +113,8 @@ private:
         rescaled,
         createCopy,
         convertedToFormat,
-        getClippedImage
+        getClippedImage,
+        clipCopyAndConvert
     };
 
     juce::ComboBox resamplingQualityCombo;
@@ -128,10 +130,11 @@ private:
     //
     juce::Image cachedImage;
     juce::Image editedImage;
+    juce::Image copiedAndClippedImage;
 
     void createCachedImages()
     {
-        auto imageSize = getLocalBounds().removeFromLeft(getWidth() / 2).reduced(50);
+        auto imageSize = getLocalBounds().removeFromLeft(getWidth() / 2).reduced(50).withZeroOrigin();
         cachedImage = juce::Image{ juce::Image::ARGB, imageSize.getWidth(), imageSize.getHeight(), true };
 
         {
@@ -147,6 +150,8 @@ private:
 
             g.setColour(juce::Colours::aliceblue);
             g.drawEllipse(cachedImage.getBounds().toFloat().reduced(10.0f), 5.0f);
+
+            g.drawRect(cachedImage.getBounds());
         }
 
         //
@@ -188,8 +193,28 @@ private:
 
         case Mode::getClippedImage:
         {
-            imageSize *= 0.75f;
-            editedImage = cachedImage.getClippedImage(imageSize);
+            editedImage = cachedImage.getClippedImage(imageSize.removeFromTop(100));
+            break;
+        }
+
+        case Mode::clipCopyAndConvert:
+        {
+            auto croppedSize = imageSize.removeFromTop(100);
+            editedImage = cachedImage.getClippedImage(croppedSize);
+            editedImage = editedImage.createCopy();
+            editedImage = juce::SoftwareImageType{} .convert(editedImage);
+
+            Image::BitmapData bitmapData{ editedImage, Image::BitmapData::readWrite };
+            jassert(bitmapData.width == croppedSize.getWidth());
+            jassert(bitmapData.height == croppedSize.getHeight());
+
+            int lineNumber = 33;
+            PixelARGB* line = (PixelARGB*)bitmapData.getLinePointer(lineNumber);
+            for (int x = 0; x < bitmapData.width; ++x)
+            {
+                line[x].setARGB(0xff, 0xff, 0, 0);
+            }
+
             break;
         }
         }
@@ -197,4 +222,3 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImageEditTest)
 };
-
