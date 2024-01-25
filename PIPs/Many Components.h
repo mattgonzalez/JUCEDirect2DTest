@@ -30,7 +30,7 @@ public:
     {
         setLookAndFeel(this);
 
-        for (int i = 0; i < 10000; ++i)
+        for (int i = 0; i < 2000; ++i)
         {
             auto button = std::make_unique<AnimatedButton>();
             addAndMakeVisible(button.get());
@@ -79,9 +79,8 @@ public:
 
         void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
         {
-            return;
-
-            g.setColour(juce::Colour{ (uint32)getX() }.withAlpha(1.0f));
+            ColourGradient gradient{ juce::Colour{ (uint32)getX() }, 0.0f, 0.0f, juce::Colour{ (uint32)getX() }.withAlpha(0.0f), 0.0f, (float)getHeight(), false };
+            //g.setColour(juce::Colour{ (uint32)getX() }.withAlpha(1.0f));
             g.fillRect(pos, 0.0f, (float)getWidth(), (float)getHeight());
             pos += 10.0f;
             if (pos >= (float)getWidth())
@@ -95,8 +94,8 @@ public:
     {
         if (auto peer = getPeer())
         {
-            //statTable.addToDesktop(0, nullptr);
-            //statTable.setAlwaysOnTop(true);
+            statTable.addToDesktop(0, nullptr);
+            statTable.setAlwaysOnTop(true);
         }
         else
         {
