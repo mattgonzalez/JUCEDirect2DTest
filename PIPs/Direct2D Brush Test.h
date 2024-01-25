@@ -274,13 +274,14 @@ private:
             break;
         }
 
+        auto center = image.getBounds().getCentre().toFloat();
         switch (brushTransformCombo.getSelectedId())
         {
         case TransformType::noTransform:
             break;
 
         case TransformType::scale:
-            fillType.transform = juce::AffineTransform::scale(2.0f, 3.0f, image.getBounds().getCentreX(), image.getBounds().getCentreY());
+            fillType.transform = juce::AffineTransform::scale(2.0f, 3.0f, center.x, center.y);
             break;
 
         case TransformType::translate:
@@ -292,7 +293,7 @@ private:
             break;
 
         case TransformType::rotate:
-            fillType.transform = juce::AffineTransform::rotation(-0.5f, image.getBounds().getCentreX(), image.getBounds().getCentreY());
+            fillType.transform = juce::AffineTransform::rotation(-0.5f, center.x, center.y);
             break;
         }
 
@@ -305,7 +306,7 @@ private:
             break;
 
         case TransformType::scale:
-            transform = juce::AffineTransform::scale(0.5f, 0.5f, image.getBounds().getCentreX(), image.getBounds().getCentreY());
+            transform = juce::AffineTransform::scale(0.5f, 0.5f, center.x, center.y);
             break;
 
         case TransformType::translate:
@@ -317,7 +318,7 @@ private:
             break;
 
         case TransformType::rotate:
-            transform = juce::AffineTransform::rotation(0.5f, image.getBounds().getCentreX(), image.getBounds().getCentreY());
+            transform = juce::AffineTransform::rotation(0.5f, center.x, center.y);
             break;
         }
         g.addTransform(transform);
