@@ -72,7 +72,7 @@ public:
     void resized() override
     {
         {
-            modeCombo.setBounds(getWidth() - 130, 10, 120, 30);
+            modeCombo.setBounds(getWidth() - 180, 10, 120, 30);
 
             juce::Rectangle<int> r{ getWidth() - 300, modeCombo.getBottom() + 5, 120, 30 };
             strokeThicknessLabel.setBounds(r.withWidth(120));
