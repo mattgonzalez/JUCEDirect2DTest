@@ -26,6 +26,8 @@ class CachedPathCreationTest : public juce::Component
 public:
     CachedPathCreationTest()
     {
+        setBufferedToImage(true);
+
         addAndMakeVisible(pathSegmentCountLabel);
         pathSegmentCountSlider.setRange({ 4.0, 100000.0 }, 1.0);
         pathSegmentCountSlider.setValue(1000.0, juce::dontSendNotification);
@@ -68,12 +70,21 @@ public:
         addAndMakeVisible(modeCombo);
         modeCombo.setSelectedId(Mode::strokePath, juce::sendNotificationSync);
 
-        cacheToggle.setToggleState(true, dontSendNotification);
+        cacheToggle.setToggleState(path.isCacheEnabled(), dontSendNotification);
         addAndMakeVisible(cacheToggle);
         cacheToggle.onClick = [this]()
             {
                 path.setCacheEnabled(cacheToggle.getToggleState());
                 repaint();
+            };
+
+        addAndMakeVisible(direct2DToggle);
+        direct2DToggle.onClick = [this]()
+            {
+                if (auto peer = getPeer())
+                {
+                    peer->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0);
+                }
             };
 
         setSize(1024, 1024);
@@ -101,10 +112,12 @@ public:
             r.translate(0, 30);
             cacheToggle.setBounds(strokeThicknessSlider.getX(), r.getY(), 120, 30);
         }
-        
+
         transformScaleLabel.setBounds(0, getHeight() - 30, 50, 30);
         yScaleSlider.setBounds(0, 0, 50, transformScaleLabel.getY());
         xScaleSlider.setBounds(transformScaleLabel.getRight(), transformScaleLabel.getY(), getWidth() - transformScaleLabel.getRight(), transformScaleLabel.getHeight());
+
+        direct2DToggle.setBounds(getWidth() / 2 - 60, 10, 120, 30);
 
         createPath();
     }
@@ -148,7 +161,7 @@ public:
     {
         if (auto peer = getPeer())
         {
-            peer->setCurrentRenderingEngine(1);
+            direct2DToggle.setToggleState(peer->getCurrentRenderingEngine() > 0, dontSendNotification);
         }
     }
 
@@ -170,6 +183,7 @@ private:
     juce::Slider xScaleSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxLeft };
     juce::Slider yScaleSlider{ juce::Slider::LinearVertical, juce::Slider::TextBoxBelow };
     juce::ToggleButton cacheToggle{ "Cached" };
+    juce::ToggleButton direct2DToggle{ "Direct2D" };
     juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
     double lastMsec = juce::Time::getMillisecondCounterHiRes();
 
@@ -213,6 +227,8 @@ private:
             angle += angleStep;
         }
         path.closeSubPath();
+
+        cacheToggle.setToggleState(path.isCacheEnabled(), dontSendNotification);
 
         repaint();
     }
