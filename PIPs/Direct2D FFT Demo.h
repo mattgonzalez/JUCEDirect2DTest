@@ -1,14 +1,33 @@
+/*
+  ==============================================================================
+
+   This file is part of the JUCE examples.
+   Copyright (c) Raw Material Software Limited
+
+   The code included in this file is provided under the terms of the ISC license
+   http://www.isc.org/downloads/software-support-policy/isc-license. Permission
+   To use, copy, modify, and/or distribute this software for any purpose with or
+   without fee is hereby granted provided that the above copyright notice and
+   this permission notice appear in all copies.
+
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES,
+   WHETHER EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR
+   PURPOSE, ARE DISCLAIMED.
+
+  ==============================================================================
+*/
+
 /*******************************************************************************
  The block below describes the properties of this PIP. A PIP is a short snippet
  of code that can be read by the Projucer and used to generate a JUCE project.
 
  BEGIN_JUCE_PIP_METADATA
 
- name:             Direct2D FFT Demo
+ name:             SimpleFFTDemo
  version:          1.0.0
  vendor:           JUCE
  website:          http://juce.com
- description:      Display a spectrogram using Direct2D
+ description:      Simple FFT application.
 
  dependencies:     juce_audio_basics, juce_audio_devices, juce_audio_formats,
                    juce_audio_processors, juce_audio_utils, juce_core,
@@ -87,16 +106,26 @@ public:
     }
 
     //==============================================================================
+
+    void resized() override
+    {
+        spectrogramImage = Image{ Image::ARGB, getWidth(), fftSize, true };
+        column = 0;
+    }
+
     void paint (Graphics& g) override
     {
         g.fillAll (Colours::black);
 
         g.setOpacity (1.0f);
-        g.drawImage (spectrogramImage, getLocalBounds().toFloat());
+
+        g.setImageResamplingQuality(Graphics::highResamplingQuality);
+        g.addTransform(AffineTransform::scale(1.0f, (float)getHeight() / (float)spectrogramImage.getHeight()));
+        g.drawImageAt(spectrogramImage, -column - 1, 0);
+        g.drawImageAt(spectrogramImage, getWidth() - column - 1, 0);
     }
 
-#if 0
-    void timerCallback() override
+    void onVblank()
     {
         if (nextFFTBlockReady)
         {
@@ -105,7 +134,6 @@ public:
             repaint();
         }
     }
-#endif
 
     void pushNextSampleIntoFifo (float sample) noexcept
     {
@@ -128,11 +156,7 @@ public:
 
     void drawNextLineOfSpectrogram()
     {
-        auto rightHandEdge = spectrogramImage.getWidth() - 1;
         auto imageHeight   = spectrogramImage.getHeight();
-
-        // first, shuffle our image leftwards by 1 pixel..
-        spectrogramImage.moveImageSection (0, 0, 1, 0, rightHandEdge, imageHeight);
 
         // then render our FFT data..
         forwardFFT.performFrequencyOnlyForwardTransform (fftData);
@@ -141,14 +165,24 @@ public:
         // show up the detail clearly
         auto maxLevel = FloatVectorOperations::findMinAndMax (fftData, fftSize / 2);
 
-        for (auto y = 1; y < imageHeight; ++y)
+        //
+        // Fill lots of little rectangles
+        //
         {
-            auto skewedProportionY = 1.0f - std::exp (std::log ((float) y / (float) imageHeight) * 0.2f);
-            auto fftDataIndex = jlimit (0, fftSize / 2, (int) (skewedProportionY * (int) fftSize / 2));
-            auto level = jmap (fftData[fftDataIndex], 0.0f, jmax (maxLevel.getEnd(), 1e-5f), 0.0f, 1.0f);
+            Graphics g{ spectrogramImage };
 
-            spectrogramImage.setPixelAt (rightHandEdge, y, Colour::fromHSV (level, 1.0f, level, 1.0f));
+            for (auto y = 1; y < imageHeight; ++y)
+            {
+                auto skewedProportionY = 1.0f - std::exp(std::log((float)y / (float)imageHeight) * 0.2f);
+                auto fftDataIndex = jlimit(0, fftSize / 2, (int)(skewedProportionY * (int)fftSize / 2));
+                auto level = jmap(fftData[fftDataIndex], 0.0f, jmax(maxLevel.getEnd(), 1e-5f), 0.0f, 1.0f);
+
+                g.setColour(Colour::fromHSV(level, 1.0f, level, 1.0f));
+                g.fillRect(column, y, 1, 1);
+            }
         }
+
+        column = (column + 1) % spectrogramImage.getWidth();
     }
 
     enum
@@ -160,11 +194,14 @@ public:
 private:
     dsp::FFT forwardFFT;
     Image spectrogramImage;
+    int column = 0;
 
     float fifo [fftSize];
     float fftData [2 * fftSize];
     int fifoIndex = 0;
     bool nextFFTBlockReady = false;
+
+    VBlankAttachment vblank{ this, [this]() { onVblank(); } };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Direct2DFFTDemo)
 };
