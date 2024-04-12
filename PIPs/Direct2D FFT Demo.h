@@ -38,7 +38,7 @@
  moduleFlags:      JUCE_STRICT_REFCOUNTEDPOINTER=1
 
  type:             Component
- mainClass:        SimpleFFTDemo
+ mainClass:        Direct2DFFTDemo
 
  useLocalCopy:     1
 
@@ -50,10 +50,10 @@
 
 
 //==============================================================================
-class SimpleFFTDemo final : public AudioAppComponent
+class Direct2DFFTDemo final : public AudioAppComponent
 {
 public:
-    SimpleFFTDemo() :
+    Direct2DFFTDemo() :
          #ifdef JUCE_DEMO_RUNNER
           AudioAppComponent (getSharedAudioDeviceManager (1, 0)),
          #endif
@@ -76,7 +76,7 @@ public:
         setSize (700, 500);
     }
 
-    ~SimpleFFTDemo() override
+    ~Direct2DFFTDemo() override
     {
         shutdownAudio();
     }
@@ -203,5 +203,5 @@ private:
 
     VBlankAttachment vblank{ this, [this]() { onVblank(); } };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleFFTDemo)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Direct2DFFTDemo)
 };

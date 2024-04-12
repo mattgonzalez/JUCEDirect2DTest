@@ -26,9 +26,6 @@ class BrushTest : public juce::Component, public juce::ImagePixelData::Listener
 public:
     BrushTest()
     {
-        addAndMakeVisible(direct2DToggle);
-        direct2DToggle.onClick = [this] { getPeer()->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0); };
-
         drawTypeCombo.addItem("fillRect", fillRect);
         drawTypeCombo.addItem("fillRectList", fillRectList);
         drawTypeCombo.addItem("drawRect", drawRect);
@@ -89,19 +86,16 @@ public:
 
     void resized() override
     {
-        juce::Rectangle<int> r{ 10, 10, 250, 30 };
-        direct2DToggle.setBounds(r);
-
-        r.translate(0, 40);
+        juce::Rectangle<int> r{ 10, 0, 220, 30 };
         drawTypeCombo.setBounds(r);
 
-        r.translate(0, 40);
+        r.translate(260, 0);
         fillTypeCombo.setBounds(r);
 
-        r.translate(0, 40);
+        r.translate(260, 0);
         transformCombo.setBounds(r);
 
-        r.translate(0, 40);
+        r.translate(260, 0);
         brushTransformCombo.setBounds(r);
 
         createCachedImages();
@@ -118,53 +112,9 @@ public:
             return;
         }
 
-        g.drawImageAt(softwareImage, 0, 0);
-        g.drawImageAt(direct2DImage, softwareImage.getWidth(), 0);
+        g.drawImageAt(softwareImage, 0, 30);
+        g.drawImageAt(direct2DImage, softwareImage.getWidth(), 30);
     }
-
-#if 0
-    void animate()
-    {
-        auto now = juce::Time::getMillisecondCounterHiRes();
-        auto elapsedSeconds = (now - lastMsec) * 0.001;
-        lastMsec = now;
-
-        {
-            auto nextPhase = phase + elapsedSeconds * juce::MathConstants<double>::twoPi * 0.2;
-            while (nextPhase >= juce::MathConstants<double>::twoPi)
-                nextPhase -= juce::MathConstants<double>::twoPi;
-
-            phase = nextPhase;
-        }
-
-        auto position = (float)std::sin(phase);
-        auto clampedPosition = juce::jlimit(0.0f, 1.0f, position * 0.5f + 0.5f);
-        auto imageCenter = cachedImage.getBounds().getCentre().toFloat();
-        auto componentCenter = getLocalBounds().getCentre().toFloat();
-        switch (transformCombo.getSelectedId())
-        {
-        case TransformType::scale:
-            animatedTransform = juce::AffineTransform::scale(clampedPosition, clampedPosition, imageCenter.x, imageCenter.y);
-            break;
-
-        case TransformType::translate:
-            animatedTransform = juce::AffineTransform::translation(position * 50.0f, position * 50.0f);
-            break;
-
-        case TransformType::shear:
-            animatedTransform = juce::AffineTransform::shear(position * 0.5f, position * 0.5f);
-            break;
-
-        case TransformType::rotate:
-            animatedTransform = juce::AffineTransform::rotation((float)phase, imageCenter.x, imageCenter.y);
-            break;
-        }
-
-        animatedTransform = animatedTransform.translated(componentCenter - imageCenter);
-
-        repaint();
-    }
-#endif
 
     void imageDataChanged(ImagePixelData*) override
     {
@@ -185,14 +135,6 @@ public:
         //
         // To test this, change the Windows display DPI while your app is running
         //
-    }
-
-    void parentHierarchyChanged() override
-    {
-        if (auto peer = getPeer())
-        {
-            direct2DToggle.setToggleState(peer->getCurrentRenderingEngine() > 0, juce::dontSendNotification);
-        }
     }
 
 private:
@@ -225,12 +167,6 @@ private:
         rotate
     };
 
-    //juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
-    double lastMsec = juce::Time::getMillisecondCounterHiRes();
-    juce::AffineTransform animatedTransform;
-    double phase = 0.0;
-
-    juce::ToggleButton direct2DToggle{ "Direct2D" };
     juce::ComboBox drawTypeCombo;
     juce::ComboBox fillTypeCombo;
     juce::ComboBox transformCombo;
@@ -247,12 +183,14 @@ private:
     juce::Image softwareImage;
     juce::Image direct2DImage;
 
-    void paintImage(Image& image)
+    void paintImage(Image& image, StringRef title)
     {
         Graphics g{ image };
 
         g.setColour(juce::Colours::white);
         g.drawRect(image.getBounds());
+        g.setFont(30.0f);
+        g.drawText(title, image.getBounds().removeFromBottom(30), Justification::centred);
 
         FillType fillType;
         switch (fillTypeCombo.getSelectedId())
@@ -366,16 +304,15 @@ private:
             g.drawText("TEXT", image.getBounds(), juce::Justification::centred, true);
             break;
         }
-
     }
 
     void createCachedImages()
     {
-        softwareImage = Image{ Image::ARGB, getWidth() / 2, getHeight(), true, SoftwareImageType{} };
-        paintImage(softwareImage);
+        softwareImage = Image{ Image::ARGB, getWidth() / 2, getHeight() - 30, true, SoftwareImageType{} };
+        paintImage(softwareImage, "Software renderer");
 
-        direct2DImage = Image{ Image::ARGB, getWidth() / 2, getHeight(), true, NativeImageType{} };
-        paintImage(direct2DImage);
+        direct2DImage = Image{ Image::ARGB, getWidth() / 2, getHeight() - 30, true, NativeImageType{} };
+        paintImage(direct2DImage, "Direct2D");
     }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BrushTest)

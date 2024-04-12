@@ -4,7 +4,7 @@
 
  BEGIN_JUCE_PIP_METADATA
 
-  name:             Direct2D SVG Test
+  name:             Direct2D SVG Path Test
 
   dependencies:     juce_core, juce_data_structures, juce_events, juce_graphics, juce_gui_basics
   exporters:        VS2022
@@ -13,7 +13,7 @@
   defines:          JUCE_DIRECT2D_METRICS=1
 
   type:             Component
-  mainClass:        SVGTest
+  mainClass:        SVGPathTest
 
  END_JUCE_PIP_METADATA
 
@@ -21,60 +21,103 @@
 
 #pragma once
 
-class SVGTest : public juce::Component, public juce::FileDragAndDropTarget
+class SVGPathTest : public juce::Component, public juce::FileDragAndDropTarget
 {
 public:
-    SVGTest()
+    SVGPathTest()
     {
         addAndMakeVisible(transformScaleLabel);
 
-        yScaleSlider.setRange({ 0.01, 1000.0 }, 0.001);
-        yScaleSlider.setSkewFactor(0.4);
+        yScaleSlider.setRange({ 0.1, 1000.0 }, 0.1);
+        yScaleSlider.setSkewFactor(0.5f);
         yScaleSlider.setValue(1.0, juce::dontSendNotification);
         addAndMakeVisible(yScaleSlider);
         yScaleSlider.onValueChange = [this] { repaint(); };
 
-        xScaleSlider.setRange({ 0.01, 1000.0 }, 0.001);
-        xScaleSlider.setSkewFactor(0.4);
+        xScaleSlider.setRange({ 0.1, 1000.0 }, 0.1);
+        xScaleSlider.setSkewFactor(0.5f);
         xScaleSlider.setValue(1.0, juce::dontSendNotification);
         addAndMakeVisible(xScaleSlider);
         xScaleSlider.onValueChange = [this] { repaint(); };
 
+        addAndMakeVisible(strokeThicknessLabel);
+        strokeThicknessSlider.setRange({ 1.0, 50.0 }, 0.01);
+        strokeThicknessSlider.setValue(1.0, juce::dontSendNotification);
+        addAndMakeVisible(strokeThicknessSlider);
+        strokeThicknessSlider.onValueChange = [this] { repaint(); };
+
+        modeCombo.onChange = [this]
+            {
+                bool strokeEnabled = modeCombo.getSelectedId() == Mode::strokePath;
+                strokeThicknessSlider.setEnabled(strokeEnabled);
+            };
+        modeCombo.addItem("fillPath", Mode::fillPath);
+        modeCombo.addItem("strokePath", Mode::strokePath);
+        addAndMakeVisible(modeCombo);
+        modeCombo.setSelectedId(Mode::strokePath, juce::sendNotificationSync);
+
+        cacheToggle.setToggleState(true, dontSendNotification);
+        addAndMakeVisible(cacheToggle);
+        cacheToggle.onClick = [this]()
+            {
+                path.setCacheEnabled(cacheToggle.getToggleState());
+                repaint();
+            };
+
         setSize(1024, 1024);
     }
 
-    ~SVGTest() override = default;
+    ~SVGPathTest() override = default;
 
     void resized() override
     {
+        {
+            modeCombo.setBounds(getWidth() - 180, 10, 120, 30);
+
+            juce::Rectangle<int> r{ getWidth() - 300, modeCombo.getBottom() + 5, 120, 30 };
+            strokeThicknessLabel.setBounds(r.withWidth(120));
+            strokeThicknessSlider.setBounds(r.withX(strokeThicknessLabel.getRight()).withWidth(getWidth() - strokeThicknessLabel.getRight()));
+
+            r.translate(0, 30);
+            cacheToggle.setBounds(strokeThicknessSlider.getX(), r.getY(), 120, 30);
+        }
+
         transformScaleLabel.setBounds(0, getHeight() - 30, 50, 30);
         yScaleSlider.setBounds(0, 0, 50, transformScaleLabel.getY());
         xScaleSlider.setBounds(transformScaleLabel.getRight(), transformScaleLabel.getY(), getWidth() - transformScaleLabel.getRight(), transformScaleLabel.getHeight());
-
-        brushImage = Image{ Image::ARGB, 200, 200, true };
-        Graphics g{ brushImage };
-        g.fillCheckerBoard(brushImage.getBounds().toFloat(), 100.0f, 100.0f, Colour{ 0xff111111 }, Colour{ 0xff222222 });
     }
 
     void paint(juce::Graphics& g) override
     {
-        //
-        // Using an Image brush is much faster than drawing the checkerboard
-        //
-        g.setTiledImageFill(brushImage, 0, 0, 1.0f);
-        g.fillAll();
+        g.fillAll(juce::Colours::black);
 
-        if (svg)
+        //
+        // Fill or stroke the Path member variable to take advantage of
+        // geometry caching
+        //
+        auto xScale = (float)xScaleSlider.getValue();
+        auto yScale = (float)yScaleSlider.getValue();
+        auto localBounds = getLocalBounds().toFloat();
+        auto pathBounds = path.getBounds();
+        auto transform = juce::AffineTransform::translation(getLocalBounds().getCentre().toFloat() - pathBounds.getCentre()).
+            scaled(xScale, yScale, localBounds.getCentreX(), localBounds.getCentreY());
+
+        switch (modeCombo.getSelectedId())
         {
-            auto drawableBounds = svg->getDrawableBounds();
-            auto transformedR = Rectangle<float>{ drawableBounds.getWidth() * (float)xScaleSlider.getValue(), drawableBounds.getHeight() * (float)yScaleSlider.getValue() };
-            transformedR.setCentre(getLocalBounds().getCentre().toFloat());
-
-            auto transform = juce::AffineTransform::translation(transformedR.getCentre() - drawableBounds.getCentre());
-            transform = transform.scaled((float)xScaleSlider.getValue(), (float)yScaleSlider.getValue(), transformedR.getCentreX(), transformedR.getCentreY());
-
-            g.setColour(juce::Colours::cyan);
+        case Mode::fillPath:
+        {
+            g.setColour(juce::Colours::orchid);
             g.fillPath(path, transform);
+            break;
+        }
+
+        case Mode::strokePath:
+        {
+            auto strokeType = createStrokeType();
+            g.setColour(juce::Colours::cyan);
+            g.strokePath(path, strokeType, transform);
+            break;
+        }
         }
     }
 
@@ -83,50 +126,57 @@ public:
         repaint();
     }
 
-    void parentHierarchyChanged() override
-    {
-        if (auto peer = getPeer())
-        {
-            peer->setCurrentRenderingEngine(1);
-        }
-    }
-
-
     bool isInterestedInFileDrag(const StringArray& files) override
     {
-        for (auto const& filename : files)
-        {
-            if (filename.endsWith(".svg"))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        File file{ files[0] };
+        return file.hasFileExtension("svg");
     }
-
 
     void filesDropped(const StringArray& files, int, int) override
     {
-        juce::File file = files[0];
-        svg = juce::Drawable::createFromSVGFile(file);
+        File file{ files[0] };
+        auto svg = juce::Drawable::createFromImageFile(file);
         if (svg)
         {
             path = svg->getOutlineAsPath();
         }
-        repaint();
     }
 
 private:
+    enum Mode
+    {
+        fillPath = 1,
+        strokePath
+    };
+
     juce::ComboBox modeCombo;
+    juce::Label strokeThicknessLabel{ {}, "Stroke thickness" };
     juce::Label transformScaleLabel{ {}, "Scale" };
+    juce::Slider strokeThicknessSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider xScaleSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxLeft };
     juce::Slider yScaleSlider{ juce::Slider::LinearVertical, juce::Slider::TextBoxBelow };
+    juce::ToggleButton cacheToggle{ "Cached" };
+    juce::VBlankAttachment attachment{ this, [this]() { animate(); } };
+    double lastMsec = juce::Time::getMillisecondCounterHiRes();
 
-    Image brushImage;
-    std::unique_ptr<Drawable> svg;
+    //
+    // Direct2D resources are generally more expensive to create than they are to draw.
+    // If you have an Path you want to use more than once, keep it as a member
+    // variable or on the heap. The renderer will create and cache a geometry
+    // realization for the Path if you draw the same Path more than once.
+    //
+    // Drawing a cached geometry realization is much faster than drawing a non-cached Path.
+    //
     juce::Path path;
+    juce::Rectangle<int> pathPaintArea;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SVGTest)
+    juce::PathStrokeType createStrokeType() const noexcept
+    {
+        return juce::PathStrokeType{ (float)strokeThicknessSlider.getValue(),
+                juce::PathStrokeType::JointStyle::curved,
+                juce::PathStrokeType::EndCapStyle::rounded };
+    }
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SVGPathTest)
 };
 
