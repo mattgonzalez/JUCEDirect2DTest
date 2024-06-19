@@ -39,6 +39,16 @@ public:
             };
         addAndMakeVisible(checkSizeSlider);
 
+        direct2DToggle.setToggleState(true, juce::dontSendNotification);
+        addAndMakeVisible(direct2DToggle);
+        direct2DToggle.onClick = [this]()
+            {
+                if (auto peer = getPeer())
+                {
+                    peer->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0);
+                }
+            };
+
         updater.addAnimator(animator);
         animator.start();
 
@@ -51,31 +61,48 @@ public:
     {
         modeCombo.setBounds(10, 10, 250, 30);
         checkSizeSlider.setBounds(10, 50, 250, 30);
+        direct2DToggle.setBounds(10, 90, 150, 30);
+
         createCachedImage();
     }
 
     void paint(juce::Graphics& g) override
     {
-        auto x = std::sin(position * juce::MathConstants<float>::twoPi) * 100.0f;
-        auto checkSize = (float) checkSizeSlider.getValue();
-        switch (modeCombo.getSelectedId())
+        double elapsed = 0.0;
+
         {
-        case (int)Mode::drawCheckerboard:
-        {
-            g.fillAll(juce::Colours::darkgrey);
-            g.setColour(juce::Colours::lightgrey);
-            g.addTransform(juce::AffineTransform::translation(x - checkSize, 0.0f));
-            g.fillRectList(list);
-            break;
+            juce::ScopedTimeMeasurement set{ elapsed };
+            juce::Graphics::ScopedSaveState state{ g };
+
+	        auto x = std::sin(position * juce::MathConstants<float>::twoPi) * 100.0f;
+	        auto checkSize = (float) checkSizeSlider.getValue();
+	        switch (modeCombo.getSelectedId())
+	        {
+	        case (int)Mode::drawCheckerboard:
+	        {
+	            g.fillAll(juce::Colours::darkgrey);
+	            g.setColour(juce::Colours::lightgrey);
+	            g.addTransform(juce::AffineTransform::translation(x - checkSize, 0.0f));
+	            g.fillRectList(list);
+	            break;
+	        }
+
+	        case (int)Mode::setFillType:
+	        {
+	            g.setFillType(juce::FillType{ checkerImage, juce::AffineTransform::translation(x, 0.0f) });
+	            g.fillAll();
+	            break;
+	        }
+	        }
         }
 
-        case (int)Mode::setFillType:
-        {
-            g.setFillType(juce::FillType{ checkerImage, juce::AffineTransform::translation(x, 0.0f) });
-            g.fillAll();
-            break;
-        }
-        }
+        g.setColour(juce::Colours::black.withAlpha(0.9f));
+        g.fillRect(5, 5, 280, 150);
+        g.setColour(juce::Colours::white.withAlpha(0.9f));
+        g.fillRect(getLocalBounds().removeFromBottom(30));
+        g.setColour(juce::Colours::black);
+        g.setFont(juce::FontOptions{ 30.0f, juce::Font::bold });
+        g.drawText(juce::String{ elapsed * 1000.0, 3 } + " ms", getLocalBounds(), juce::Justification::centredBottom);
     }
 
 private:
@@ -98,6 +125,7 @@ private:
     };
     juce::ComboBox modeCombo;
     juce::Slider checkSizeSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::ToggleButton direct2DToggle{ "Direct2D" };
 
     juce::Image checkerImage;
     juce::RectangleList<float> list;
