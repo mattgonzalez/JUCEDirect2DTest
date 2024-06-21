@@ -31,13 +31,21 @@ public:
         addAndMakeVisible(modeCombo);
         modeCombo.setSelectedId((int)Mode::drawCheckerboard, juce::dontSendNotification);
 
-        checkSizeSlider.setRange(2.0, 100.0, 1.0);
-        checkSizeSlider.setValue(100.0, juce::dontSendNotification);
-        checkSizeSlider.onValueChange = [this]
+        checkWidthSlider.setRange(2.0, 1000.0, 1.0);
+        checkWidthSlider.setValue(100.0, juce::dontSendNotification);
+        checkWidthSlider.onValueChange = [this]
             {
                 createCachedImage();
             };
-        addAndMakeVisible(checkSizeSlider);
+        addAndMakeVisible(checkWidthSlider);
+
+        checkHeightSlider.setRange(2.0, 1000.0, 1.0);
+        checkHeightSlider.setValue(100.0, juce::dontSendNotification);
+        checkHeightSlider.onValueChange = [this]
+            {
+                createCachedImage();
+            };
+        addAndMakeVisible(checkHeightSlider);
 
         direct2DToggle.setToggleState(true, juce::dontSendNotification);
         addAndMakeVisible(direct2DToggle);
@@ -60,8 +68,9 @@ public:
     void resized() override
     {
         modeCombo.setBounds(10, 10, 250, 30);
-        checkSizeSlider.setBounds(10, 50, 250, 30);
-        direct2DToggle.setBounds(10, 90, 150, 30);
+        checkWidthSlider.setBounds(10, 50, 250, 30);
+        checkHeightSlider.setBounds(10, 90, 250, 30);
+        direct2DToggle.setBounds(10, 120, 150, 30);
 
         createCachedImage();
     }
@@ -75,7 +84,7 @@ public:
             juce::Graphics::ScopedSaveState state{ g };
 
 	        auto x = std::sin(position * juce::MathConstants<float>::twoPi) * 100.0f;
-	        auto checkSize = (float) checkSizeSlider.getValue();
+	        auto checkSize = (float) checkWidthSlider.getValue();
 	        switch (modeCombo.getSelectedId())
 	        {
 	        case (int)Mode::drawCheckerboard:
@@ -124,7 +133,8 @@ private:
         setFillType
     };
     juce::ComboBox modeCombo;
-    juce::Slider checkSizeSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Slider checkWidthSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Slider checkHeightSlider{ juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::ToggleButton direct2DToggle{ "Direct2D" };
 
     juce::Image checkerImage;
@@ -132,19 +142,20 @@ private:
 
     void createCachedImage()
     {
-        auto checkSize = (float)checkSizeSlider.getValue();;
-        checkerImage = juce::Image(juce::Image::PixelFormat::RGB, juce::roundToInt(checkSize) * 2, juce::roundToInt(checkSize) * 2, true);
+        auto checkWidth = (float)checkWidthSlider.getValue();;
+        auto checkHeight = (float)checkHeightSlider.getValue();;
+        checkerImage = juce::Image(juce::Image::PixelFormat::RGB, juce::roundToInt(checkWidth) * 2, juce::roundToInt(checkHeight) * 2, true);
         juce::Graphics g{ checkerImage };
-        g.fillCheckerBoard(checkerImage.getBounds().toFloat(), checkSize, checkSize, Colours::lightgrey, Colours::darkgrey);
+        g.fillCheckerBoard(checkerImage.getBounds().toFloat(), checkWidth, checkHeight * 2.0f, Colours::lightgrey, Colours::darkgrey);
 
         list.clear();
-        list.ensureStorageAllocated(((float)getWidth() / checkSize) * ((float)getHeight() / checkSize));
-        for (float x= 0.0f; x < getWidth(); x += checkSize * 2.0f)
+        list.ensureStorageAllocated(roundToInt(((float)getWidth() / checkWidth) * ((float)getHeight() / checkHeight)));
+        for (float x= 0.0f; x < getWidth(); x += checkWidth * 2.0f)
         {
-            for (float y = 0.0f; y < (float)getHeight(); y += checkSize * 2.0f)
+            for (float y = 0.0f; y < (float)getHeight(); y += checkHeight * 2.0f)
             {
-                list.addWithoutMerging({ x, y, checkSize, checkSize });
-                list.addWithoutMerging({ x + checkSize, y + checkSize, checkSize, checkSize });
+                list.addWithoutMerging({ x, y, checkWidth, checkHeight });
+                list.addWithoutMerging({ x + checkWidth, y + checkHeight, checkWidth, checkHeight });
             }
         }
     }
