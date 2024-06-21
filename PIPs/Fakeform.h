@@ -129,19 +129,6 @@ struct Randomizer
         return text;
     }
 
-    auto makeRandomFont()
-    {
-        juce::Array<juce::Font> fonts;
-
-        if (fonts.size() == 0)
-        {
-            juce::Font::findFonts(fonts);
-        }
-
-        auto const& font = fonts[random.nextInt(fonts.size())];
-        return font.withHeight(random.nextFloat() * 100.0f);
-    }
-
     auto makeRandomImage(juce::Rectangle<int> r, juce::ImageType&& imageType)
     {
         auto format = (juce::Image::PixelFormat)random.nextInt({ 1, 4 });
