@@ -124,7 +124,7 @@ private:
         void paint(juce::Graphics& g) override
         {
             double elapsedSeconds = 0.0;
-
+            
             {
                 juce::ScopedTimeMeasurement stm{ elapsedSeconds };
 
@@ -201,33 +201,47 @@ private:
                 repaint();
             } };
 
+        void parentHierarchyChanged() override 
+        {
+            if (auto peer = getPeer())
+            {
+                modeCombo.onChange();
+            }
+        }
+
         void setImageType(int imageTypeID)
         {
             auto peer = getPeer();
             if (!peer)
                 return;
 
+            // Hide the parent component to force the cached component images to reset
+            getParentComponent()->setVisible(false);
+
             switch (imageTypeID)
             {
             case softwareImage:
             {
-                imageType = std::make_unique<juce::SoftwareImageType>();
-                imagePermanence = juce::Image::Permanence::permanent;
                 peer->setCurrentRenderingEngine(0);
+
+                imagePermanence = juce::Image::Permanence::permanent;
+                imageType = std::make_unique<juce::SoftwareImageType>();
                 break;
             }
             case permanentNativeImage:
             {
+                peer->setCurrentRenderingEngine(1);
+
                 imagePermanence = juce::Image::Permanence::permanent;
                 imageType = std::make_unique<juce::NativeImageType>();
-                peer->setCurrentRenderingEngine(1);
                 break;
             }
             case disposableNativeImage:
             {
+                peer->setCurrentRenderingEngine(1);
+
                 imagePermanence = juce::Image::Permanence::disposable;
                 imageType = std::make_unique<juce::NativeImageType>();
-                peer->setCurrentRenderingEngine(1);
                 break;
             }
             }
@@ -235,6 +249,8 @@ private:
             polkaDotsImage = {};
 
             paintTimeMsecStats.reset();
+
+            getParentComponent()->setVisible(true);
         }
 
     private:
