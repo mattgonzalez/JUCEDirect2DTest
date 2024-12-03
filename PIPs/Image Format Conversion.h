@@ -26,9 +26,14 @@ class ImageFormatConversion : public juce::Component
 public:
     enum
     {
-        softwareImage = 1,
-        permanentNativeImage,
-        disposableNativeImage
+        softwareImageType = 1,
+        nativeImageType
+    };
+
+    enum
+    {
+        permanentImage = 1,
+        disposableImage
     };
 
     ImageFormatConversion()
@@ -65,7 +70,7 @@ private:
     {
         BackgroundComponent()
         {
-            setBufferedToImage(true);
+            //setBufferedToImage(true);
             setOpaque(true);
         }
 
@@ -83,16 +88,32 @@ private:
         {
             setOpaque(false);
 
-            modeCombo.addItem("Software renderer & images", softwareImage);
-            modeCombo.addItem("D2D renderer / permanent D2D images", permanentNativeImage);
-            modeCombo.addItem("D2D renderer / disposable D2D images", disposableNativeImage);
+            sourcePermanenceCombo.addItem("Permanent", permanentImage);
+            sourcePermanenceCombo.addItem("Disposable", disposableImage);
+            addAndMakeVisible(sourcePermanenceCombo);
+            sourcePermanenceCombo.setSelectedId(permanentImage, juce::dontSendNotification);
+            sourcePermanenceCombo.onChange = [this] { paintTimeMsecStats.reset();  };
 
-            addAndMakeVisible(modeCombo);
-            modeCombo.setSelectedId(disposableNativeImage, juce::dontSendNotification);
-            modeCombo.onChange = [this]
+            sourceImageTypeCombo.addItem("Software image", softwareImageType);
+            sourceImageTypeCombo.addItem("Native image", nativeImageType);
+            addAndMakeVisible(sourceImageTypeCombo);
+            sourceImageTypeCombo.setSelectedId(softwareImageType, juce::dontSendNotification);
+            sourceImageTypeCombo.onChange = sourcePermanenceCombo.onChange;
+
+            convertedImageTypeCombo.addItem("Convert to software image", softwareImageType);
+            convertedImageTypeCombo.addItem("Convert to native image", nativeImageType);
+            addAndMakeVisible(convertedImageTypeCombo);
+            convertedImageTypeCombo.setSelectedId(softwareImageType, juce::dontSendNotification);
+            convertedImageTypeCombo.onChange = sourcePermanenceCombo.onChange;
+
+            addAndMakeVisible(direct2DToggle);
+            direct2DToggle.onClick = [this]
                 {
-                    setImageType(modeCombo.getSelectedId());
+                    paintTimeMsecStats.reset();
+
+                    getPeer()->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0);
                 };
+            direct2DToggle.setToggleState(true, juce::dontSendNotification);
         }
 
         void paint(juce::Graphics& g) override
@@ -105,20 +126,29 @@ private:
                 //
                 // Create images if necessary
                 //
-                if (sourceImage.isNull() || sourceImage.getBounds() != getLocalBounds())
+                std::unique_ptr<juce::ImageType> sourceImageType;
+                
+                if (sourceImageTypeCombo.getSelectedId() == softwareImageType)
                 {
-                    sourceImage = juce::Image{ juce::Image::ARGB, getWidth() / 3, getHeight() / 3, true, *imageType, imagePermanence };
+                    sourceImageType.reset(new juce::SoftwareImageType());
+                }
+                else
+                {
+                    sourceImageType.reset(new juce::NativeImageType());
+                }
 
-                    {
-                        juce::Graphics imageG{ sourceImage };
-                        auto gradient = juce::ColourGradient{ juce::Colours::cyan, 
-                            sourceImage.getBounds().toFloat().getCentre(), 
-                            juce::Colours::black.withAlpha(0.8f), 
-                            { 0.0f, (float)sourceImage.getHeight() * 0.5f},
-                            true };
-                        imageG.setGradientFill(gradient);
-                        imageG.fillEllipse(sourceImage.getBounds().toFloat());
-                    }
+                auto sourcePermanence = sourcePermanenceCombo.getSelectedId() == permanentImage ? juce::Image::Permanence::permanent : juce::Image::Permanence::disposable;
+                auto sourceImage = juce::Image{ juce::Image::ARGB, getWidth() / 3, getHeight() / 3, true, *sourceImageType, sourcePermanence };
+
+                {
+                    juce::Graphics imageG{ sourceImage };
+                    auto gradient = juce::ColourGradient{ juce::Colours::cyan, 
+                        sourceImage.getBounds().toFloat().getCentre(), 
+                        juce::Colours::black.withAlpha(0.8f), 
+                        { 0.0f, (float)sourceImage.getHeight() * 0.5f},
+                        true };
+                    imageG.setGradientFill(gradient);
+                    imageG.fillEllipse(sourceImage.getBounds().toFloat());
                 }
 
                 //
@@ -129,11 +159,24 @@ private:
                     juce::Image::SingleChannel };
                 static juce::StringArray const formatNames{ "", "RGB", "ARGB", "SingleChannel" };
                 int x = 0, y = 0;
+
+                std::unique_ptr<juce::ImageType> convertedImageType;
+
+                if (convertedImageTypeCombo.getSelectedId() == softwareImageType)
+                {
+                    convertedImageType.reset(new juce::SoftwareImageType());
+                }
+                else
+                {
+                    convertedImageType.reset(new juce::NativeImageType());
+                }
+
                 for (auto sourceFormat : formats)
                 {
                     for (auto destFormat : formats)
                     {
-                        g.drawImageAt(sourceImage.convertedToFormat(sourceFormat).convertedToFormat(destFormat), x, y);
+                        auto convertedImage = convertedImageType->convert(sourceImage);
+                        g.drawImageAt(convertedImage.convertedToFormat(sourceFormat).convertedToFormat(destFormat), x, y);
 
                         g.setColour(juce::Colours::black);
                         g.drawText(formatNames[sourceFormat] + " to " + formatNames[destFormat], 
@@ -161,11 +204,12 @@ private:
 
         void resized() override
         {
-            sourceImage = {};
-
             paintTimeMsecStats.reset();
 
-            modeCombo.setBounds(10, 10, 300, 30);
+            sourceImageTypeCombo.setBounds(10, 10, 300, 30);
+            sourcePermanenceCombo.setBounds(10, 50, 300, 30);
+            convertedImageTypeCombo.setBounds(10, 90, 300, 30);
+            direct2DToggle.setBounds(10, 130, 300, 30);
         }
 
         juce::VBlankAttachment attachment{ this, [this]()
@@ -175,62 +219,14 @@ private:
 
         void parentHierarchyChanged() override 
         {
-            if (auto peer = getPeer())
-            {
-                modeCombo.onChange();
-            }
-        }
-
-        void setImageType(int imageTypeID)
-        {
-            auto peer = getPeer();
-            if (!peer)
-                return;
-
-            // Hide the parent component to force the cached component images to reset
-            getParentComponent()->setVisible(false);
-
-            switch (imageTypeID)
-            {
-            case softwareImage:
-            {
-                peer->setCurrentRenderingEngine(0);
-
-                imagePermanence = juce::Image::Permanence::permanent;
-                imageType = std::make_unique<juce::SoftwareImageType>();
-                break;
-            }
-            case permanentNativeImage:
-            {
-                peer->setCurrentRenderingEngine(1);
-
-                imagePermanence = juce::Image::Permanence::permanent;
-                imageType = std::make_unique<juce::NativeImageType>();
-                break;
-            }
-            case disposableNativeImage:
-            {
-                peer->setCurrentRenderingEngine(1);
-
-                imagePermanence = juce::Image::Permanence::disposable;
-                imageType = std::make_unique<juce::NativeImageType>();
-                break;
-            }
-            }
-
-            sourceImage = {};
-
-            paintTimeMsecStats.reset();
-
-            getParentComponent()->setVisible(true);
         }
 
     private:
-        std::unique_ptr<juce::ImageType> imageType = std::make_unique<juce::NativeImageType>();
-        juce::Image::Permanence imagePermanence = juce::Image::Permanence::disposable;
         juce::StatisticsAccumulator<double> paintTimeMsecStats;
-        juce::Image sourceImage;
-        juce::ComboBox modeCombo;
+        juce::ComboBox sourceImageTypeCombo;
+        juce::ComboBox sourcePermanenceCombo;
+        juce::ComboBox convertedImageTypeCombo;
+        juce::ToggleButton direct2DToggle{ "D2D" };
     } imageComponent;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImageFormatConversion)
