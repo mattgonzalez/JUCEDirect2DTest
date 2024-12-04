@@ -86,9 +86,9 @@ private:
         {
             setOpaque(false);
 
-            modeCombo.addItem("Software renderer & images", softwareImage);
-            modeCombo.addItem("D2D renderer / permanent D2D images", permanentNativeImage);
-            modeCombo.addItem("D2D renderer / disposable D2D images", disposableNativeImage);
+            modeCombo.addItem("Software image", softwareImage);
+            modeCombo.addItem("Permanent D2D images", permanentNativeImage);
+            modeCombo.addItem("Disposable D2D images", disposableNativeImage);
 
             addAndMakeVisible(modeCombo);
             modeCombo.setSelectedId(disposableNativeImage, juce::dontSendNotification);
@@ -98,7 +98,38 @@ private:
                 };
 
             addAndMakeVisible(desaturateToggle);
-            addAndMakeVisible(multiplyAllAlpha);
+            addAndMakeVisible(multiplyAllAlphaToggle);
+            addAndMakeVisible(dropShadowToggle);
+            addAndMakeVisible(glowToggle);
+
+            dropShadowToggle.onClick = [this]()
+                {
+                    if (dropShadowToggle.getToggleState())
+                        setComponentEffect(&dropShadowEffect);
+                    else
+                        setComponentEffect(nullptr);
+
+                    glowToggle.setToggleState(false, juce::dontSendNotification);
+                };
+            glowToggle.onClick = [this]()
+                {
+                    if (glowToggle.getToggleState())
+                        setComponentEffect(&glowEffect);
+                    else
+                        setComponentEffect(nullptr);
+
+                    dropShadowToggle.setToggleState(false, juce::dontSendNotification);
+                };
+
+            dropShadowEffect.setShadowProperties(juce::DropShadow{ juce::Colours::black.withAlpha(0.9f), 20, { 10, 10 } });
+            glowEffect.setGlowProperties(20.0f, juce::Colours::cyan.withAlpha(0.9f));
+
+            addAndMakeVisible(direct2DToggle);
+            direct2DToggle.setToggleState(true, juce::dontSendNotification);
+            direct2DToggle.onClick = [this]()
+                {
+                    setImageType(modeCombo.getSelectedId());
+                };
         }
 
         void paintPolkaDots()
@@ -114,6 +145,7 @@ private:
                 {
                     g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 1.0f));
                     float size = random.nextFloat() * 100.0f;
+
                     g.fillEllipse(random.nextFloat() * r.getWidth(),
                         random.nextFloat() * r.getHeight(),
                         size, size);
@@ -125,6 +157,8 @@ private:
         {
             double elapsedSeconds = 0.0;
             
+            //return;
+
             {
                 juce::ScopedTimeMeasurement stm{ elapsedSeconds };
 
@@ -161,13 +195,13 @@ private:
                 auto polkaDotsCopy = polkaDotsImage.createCopy();
                 if (desaturateToggle.getToggleState())
                     polkaDotsCopy.desaturate();
-                if (multiplyAllAlpha.getToggleState())
+                if (multiplyAllAlphaToggle.getToggleState())
                     polkaDotsCopy.multiplyAllAlphas(0.3f);
 
                 //
                 // Draw the polka dots image to the screen
                 //
-                g.drawImageAt(polkaDotsCopy, 0, 0);
+                g.drawImageAt(polkaDotsImage, 0, 0);
             }
 
             paintTimeMsecStats.addValue(elapsedSeconds * 1000.0);
@@ -186,8 +220,11 @@ private:
             paintTimeMsecStats.reset();
 
             modeCombo.setBounds(10, 10, 300, 30);
+            direct2DToggle.setBounds(modeCombo.getRight(), modeCombo.getY(), 80, 30);
             desaturateToggle.setBounds(10, modeCombo.getBottom(), 250, 25);
-            multiplyAllAlpha.setBounds(10, desaturateToggle.getBottom(), 250, 25);
+            multiplyAllAlphaToggle.setBounds(10, desaturateToggle.getBottom(), 250, 25);
+            dropShadowToggle.setBounds(desaturateToggle.getRight(), desaturateToggle.getY(), 250, 25);
+            glowToggle.setBounds(dropShadowToggle.getX(), dropShadowToggle.getBottom(), 250, 25);
         }
 
         juce::VBlankAttachment attachment{ this, [this]()
@@ -222,29 +259,25 @@ private:
             {
             case softwareImage:
             {
-                peer->setCurrentRenderingEngine(0);
-
                 imagePermanence = juce::Image::Permanence::permanent;
                 imageType = std::make_unique<juce::SoftwareImageType>();
                 break;
             }
             case permanentNativeImage:
             {
-                peer->setCurrentRenderingEngine(1);
-
                 imagePermanence = juce::Image::Permanence::permanent;
                 imageType = std::make_unique<juce::NativeImageType>();
                 break;
             }
             case disposableNativeImage:
             {
-                peer->setCurrentRenderingEngine(1);
-
                 imagePermanence = juce::Image::Permanence::disposable;
                 imageType = std::make_unique<juce::NativeImageType>();
                 break;
             }
             }
+
+            peer->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0);
 
             polkaDotsImage = {};
 
@@ -261,11 +294,41 @@ private:
         std::unique_ptr<juce::ImageType> imageType = std::make_unique<juce::NativeImageType>();
         juce::Image::Permanence imagePermanence = juce::Image::Permanence::disposable;
         juce::StatisticsAccumulator<double> paintTimeMsecStats;
+        juce::DropShadowEffect dropShadowEffect;
+        juce::GlowEffect glowEffect;
 
+        juce::ToggleButton direct2DToggle{ "Direct2D" };
         juce::ComboBox modeCombo;
         juce::ToggleButton desaturateToggle{ "Desaturate" };
-        juce::ToggleButton multiplyAllAlpha{ "Multiply all alpha" };
+        juce::ToggleButton multiplyAllAlphaToggle{ "Multiply all alpha" };
+        juce::ToggleButton dropShadowToggle{ "Drop shadow" };
+        juce::ToggleButton glowToggle{ "Glow" };
+
     } imageComponent;
+
+    struct MessageTest : public juce::HighResolutionTimer
+    {
+        MessageTest()
+        {
+            startTimer(10);
+        }
+
+        void hiResTimerCallback() override
+        {
+            asyncHandler1.triggerAsyncUpdate();
+            asyncHandler2.triggerAsyncUpdate();
+        }
+
+        struct AsyncHandler : public juce::AsyncUpdater
+        {
+            void handleAsyncUpdate() override
+            {
+                juce::Thread::sleep(10);
+            }
+        };
+
+        AsyncHandler asyncHandler1, asyncHandler2;
+    };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImagePermanence)
 };
