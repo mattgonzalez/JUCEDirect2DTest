@@ -24,6 +24,13 @@
 class ImagePermanence : public juce::Component
 {
 public:
+    enum
+    {
+        softwareImage = 1,
+        permanentNativeImage,
+        disposableNativeImage
+    };
+
     ImagePermanence()
     {
         setOpaque(true);
@@ -40,16 +47,7 @@ public:
         //
         addAndMakeVisible(imageComponent);
 
-        imagePermanenceCombo.addItem("Permanent images", juce::Image::Permanence::permanent + 1);
-        imagePermanenceCombo.addItem("Disposable images", juce::Image::Permanence::disposable + 1);
-        addAndMakeVisible(imagePermanenceCombo);
-        imagePermanenceCombo.setSelectedId(juce::Image::Permanence::disposable + 1, juce::dontSendNotification);
-        imagePermanenceCombo.onChange = [this]
-            {
-                imageComponent.setImagePermanence(juce::Image::Permanence(imagePermanenceCombo.getSelectedId() - 1));
-            };
-
-        setSize(1024, 1024);
+        setSize(800, 800);
     }
 
     ~ImagePermanence() override = default;
@@ -63,13 +61,9 @@ public:
     {
         background.setBounds(getLocalBounds());
         imageComponent.setBounds(getLocalBounds());
-
-        imagePermanenceCombo.setBounds(10, 10, 250, 30);
     }
 
 private:
-    juce::ComboBox imagePermanenceCombo;
-
     struct BackgroundComponent : public juce::Component
     {
         BackgroundComponent()
@@ -82,7 +76,7 @@ private:
         {
             g.fillCheckerBoard(getLocalBounds().toFloat(),
                 getWidth() * 0.1f, getHeight() * 0.1f,
-                Colours::lightgrey, Colours::darkgrey);
+                Colours::darkgrey, Colours::lightgrey);
         }
     } background;
 
@@ -91,11 +85,25 @@ private:
         ImageComponent()
         {
             setOpaque(false);
+
+            modeCombo.addItem("Software renderer & images", softwareImage);
+            modeCombo.addItem("D2D renderer / permanent D2D images", permanentNativeImage);
+            modeCombo.addItem("D2D renderer / disposable D2D images", disposableNativeImage);
+
+            addAndMakeVisible(modeCombo);
+            modeCombo.setSelectedId(disposableNativeImage, juce::dontSendNotification);
+            modeCombo.onChange = [this]
+                {
+                    setImageType(modeCombo.getSelectedId());
+                };
+
+            addAndMakeVisible(desaturateToggle);
+            addAndMakeVisible(multiplyAllAlpha);
         }
 
         void paintPolkaDots()
         {
-            polkaDotsImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, juce::NativeImageType{}, imagePermanence };
+            polkaDotsImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, *imageType, imagePermanence };
 
             {
                 juce::Graphics g{ polkaDotsImage };
@@ -104,7 +112,7 @@ private:
                 auto r = polkaDotsImage.getBounds().reduced(20).toFloat();
                 for (int i = 0; i < 100; ++i)
                 {
-                    g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 0.5f));
+                    g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 1.0f));
                     float size = random.nextFloat() * 100.0f;
                     g.fillEllipse(random.nextFloat() * r.getWidth(),
                         random.nextFloat() * r.getHeight(),
@@ -116,22 +124,9 @@ private:
         void paint(juce::Graphics& g) override
         {
             double elapsedSeconds = 0.0;
-
+            
             {
                 juce::ScopedTimeMeasurement stm{ elapsedSeconds };
-
-                //
-                // Use double buffering to create a persistence effect. Alternate drawing between outputImages[0] and outputImages[1].
-                //
-                // This avoids using multiplyAllAlphas, which will cause the Direct2D image to be mapped from the GPU -> CPU and cause a performance hit
-                //
-                auto& outputImage = outputImages[outputImageIndex];
-                auto& previousOutputImage = outputImages[outputImageIndex ^ 1];
-
-                //
-                // Toggle the double buffer index
-                //
-                outputImageIndex ^= 1;
 
                 //
                 // Create images if necessary
@@ -139,37 +134,46 @@ private:
                 if (polkaDotsImage.isNull() || polkaDotsImage.getBounds() != getLocalBounds())
                     paintPolkaDots();
 
-                if (outputImage.isNull() || outputImage.getBounds() != polkaDotsImage.getBounds())
-                    outputImage = juce::Image{ juce::Image::ARGB, polkaDotsImage.getWidth(), polkaDotsImage.getHeight(), true, juce::NativeImageType{}, imagePermanence };
-
                 //
-                // For each frame, paint the previous output image with slight transparency, then paint the polka dots image on top of that with full opacity
+                // Use Image::moveImageSection to animate the polka dots
                 //
                 {
-                    juce::Graphics imageGraphics{ outputImage };
-                    imageGraphics.setColour(juce::Colours::transparentBlack);
-                    imageGraphics.getInternalContext().fillRect(outputImage.getBounds(), true);
+                    auto clippedPolkaDotsImage = polkaDotsImage.getClippedImage({ 0, 0, 1, polkaDotsImage.getHeight() });
+                    clippedPolkaDotsImage = clippedPolkaDotsImage.createCopy();
 
-                    if (previousOutputImage.isValid())
+                    if (polkaDotsImage.isValid() && clippedPolkaDotsImage.isValid())
                     {
-                        imageGraphics.setOpacity(0.98f);
-                        imageGraphics.drawImageAt(previousOutputImage, 0, 0);
-                    }
+                        polkaDotsImage.moveImageSection(0, 0, 1, 0, polkaDotsImage.getWidth() - 1, polkaDotsImage.getHeight());
 
-                    imageGraphics.setOpacity(1.0f);
-                    imageGraphics.drawImageTransformed(polkaDotsImage, juce::AffineTransform::rotation((float)angle.phase, 0.5f * (float)outputImage.getWidth(), 0.5f * (float)outputImage.getHeight()));
+                        {
+                            juce::Graphics imageG{ polkaDotsImage };
+                            imageG.setColour(juce::Colours::transparentBlack);
+                            imageG.getInternalContext().fillRect({ polkaDotsImage.getWidth() - 1, 0, 1, polkaDotsImage.getHeight() }, true);
+                            imageG.setColour(juce::Colours::black);
+                            imageG.drawImageAt(clippedPolkaDotsImage, polkaDotsImage.getWidth() - 1, 0);
+                        }
+                    }
                 }
 
                 //
-                // Draw the composited output image to the screen
+                // Apply effects to polka dots
                 //
-                g.drawImageAt(outputImage, 0, 0);
+                auto polkaDotsCopy = polkaDotsImage.createCopy();
+                if (desaturateToggle.getToggleState())
+                    polkaDotsCopy.desaturate();
+                if (multiplyAllAlpha.getToggleState())
+                    polkaDotsCopy.multiplyAllAlphas(0.3f);
+
+                //
+                // Draw the polka dots image to the screen
+                //
+                g.drawImageAt(polkaDotsCopy, 0, 0);
             }
 
             paintTimeMsecStats.addValue(elapsedSeconds * 1000.0);
 
-            g.setColour(juce::Colours::black);
-            g.fillRect(getLocalBounds().removeFromRight(450).removeFromTop(50));
+            g.setColour(juce::Colours::black.withAlpha(0.8f));
+            g.fillRect(0, 0, getWidth(), 90);
             g.setColour(juce::Colours::white);
             g.setFont(g.getCurrentFont().withHeight(40.0f));
             g.drawText("Average " + juce::String{paintTimeMsecStats.getAverage(), 1} + " msec/frame", getLocalBounds(), juce::Justification::topRight);
@@ -180,6 +184,10 @@ private:
             paintPolkaDots();
 
             paintTimeMsecStats.reset();
+
+            modeCombo.setBounds(10, 10, 300, 30);
+            desaturateToggle.setBounds(10, modeCombo.getBottom(), 250, 25);
+            multiplyAllAlpha.setBounds(10, desaturateToggle.getBottom(), 250, 25);
         }
 
         juce::VBlankAttachment attachment{ this, [this]()
@@ -187,21 +195,62 @@ private:
                 auto now = juce::Time::getMillisecondCounterHiRes();
                 auto elapsedSeconds = (now - lastMsec) * 0.001;
                 lastMsec = now;
-
-                angle.advance(elapsedSeconds * juce::MathConstants<double>::twoPi * 0.2);
+                
+                angle.advance(elapsedSeconds* juce::MathConstants<double>::twoPi * 0.2);
 
                 repaint();
             } };
 
-        void setImagePermanence(juce::Image::Permanence newPermanence)
+        void parentHierarchyChanged() override 
         {
-            imagePermanence = newPermanence;
+            if (auto peer = getPeer())
+            {
+                modeCombo.onChange();
+            }
+        }
+
+        void setImageType(int imageTypeID)
+        {
+            auto peer = getPeer();
+            if (!peer)
+                return;
+
+            // Hide the parent component to force the cached component images to reset
+            getParentComponent()->setVisible(false);
+
+            switch (imageTypeID)
+            {
+            case softwareImage:
+            {
+                peer->setCurrentRenderingEngine(0);
+
+                imagePermanence = juce::Image::Permanence::permanent;
+                imageType = std::make_unique<juce::SoftwareImageType>();
+                break;
+            }
+            case permanentNativeImage:
+            {
+                peer->setCurrentRenderingEngine(1);
+
+                imagePermanence = juce::Image::Permanence::permanent;
+                imageType = std::make_unique<juce::NativeImageType>();
+                break;
+            }
+            case disposableNativeImage:
+            {
+                peer->setCurrentRenderingEngine(1);
+
+                imagePermanence = juce::Image::Permanence::disposable;
+                imageType = std::make_unique<juce::NativeImageType>();
+                break;
+            }
+            }
 
             polkaDotsImage = {};
-            for (auto& outputImage : outputImages)
-                outputImage = {};
 
             paintTimeMsecStats.reset();
+
+            getParentComponent()->setVisible(true);
         }
 
     private:
@@ -209,10 +258,13 @@ private:
         juce::dsp::Phase<double> angle;
 
         juce::Image polkaDotsImage;
-        std::array<juce::Image, 2> outputImages;
-        int outputImageIndex = 0;
+        std::unique_ptr<juce::ImageType> imageType = std::make_unique<juce::NativeImageType>();
         juce::Image::Permanence imagePermanence = juce::Image::Permanence::disposable;
         juce::StatisticsAccumulator<double> paintTimeMsecStats;
+
+        juce::ComboBox modeCombo;
+        juce::ToggleButton desaturateToggle{ "Desaturate" };
+        juce::ToggleButton multiplyAllAlpha{ "Multiply all alpha" };
     } imageComponent;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImagePermanence)
