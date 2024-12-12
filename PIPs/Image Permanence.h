@@ -134,21 +134,40 @@ private:
 
         void paintPolkaDots()
         {
-            polkaDotsImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, *imageType, imagePermanence };
+            polkaDotsLegacyImage = {};
+            polkaDotsTransientImage = {};
 
-            {
-                juce::Graphics g{ polkaDotsImage };
-                juce::Random random;
-
-                auto r = polkaDotsImage.getBounds().reduced(20).toFloat();
-                for (int i = 0; i < 100; ++i)
+            std::function<void(juce::Graphics& g)> painter = [&](juce::Graphics& g)
                 {
-                    g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 1.0f));
-                    float size = random.nextFloat() * 100.0f;
+                    juce::Random random;
 
-                    g.fillEllipse(random.nextFloat() * r.getWidth(),
-                        random.nextFloat() * r.getHeight(),
-                        size, size);
+                    auto r = getLocalBounds().toFloat();
+                    for (int i = 0; i < 100; ++i)
+                    {
+                        g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 1.0f));
+                        float size = random.nextFloat() * 100.0f;
+
+                        g.fillEllipse(random.nextFloat() * r.getWidth(),
+                            random.nextFloat() * r.getHeight(),
+                            size, size);
+                    }
+                };
+
+            if (modeCombo.getSelectedId() == disposableNativeImage)
+            {
+                if (polkaDotsTransientImage.getWidth() != getWidth() || polkaDotsTransientImage.getHeight() != getHeight())
+                {
+                    polkaDotsTransientImage.setProperties(Image::ARGB, getWidth(), getHeight(), true);
+                    polkaDotsTransientImage.modify(painter);
+                }
+            }
+            else
+            {
+                if (polkaDotsLegacyImage.getWidth() != getWidth() || polkaDotsLegacyImage.getHeight() != getHeight())
+                {
+                    polkaDotsLegacyImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, *imageType };
+                    juce::Graphics g{ polkaDotsLegacyImage };
+                    painter(g);
                 }
             }
         }
@@ -165,12 +184,12 @@ private:
                 //
                 // Create images if necessary
                 //
-                if (polkaDotsImage.isNull() || polkaDotsImage.getBounds() != getLocalBounds())
-                    paintPolkaDots();
+                paintPolkaDots();
 
                 //
                 // Use Image::moveImageSection to animate the polka dots
                 //
+                /*
                 {
                     auto clippedPolkaDotsImage = polkaDotsImage.getClippedImage({ 0, 0, 1, polkaDotsImage.getHeight() });
                     clippedPolkaDotsImage = clippedPolkaDotsImage.createCopy();
@@ -188,11 +207,26 @@ private:
                         }
                     }
                 }
+                */
 
                 //
                 // Apply effects to polka dots
                 //
-                auto polkaDotsCopy = polkaDotsImage.createCopy();
+#if 0
+                auto copyTransientImage = [](const juce::TransientImage& source)
+                    {
+                        auto clone = juce::TransientImage{};
+                        clone.setProperties(Image::ARGB, source.getWidth(), source.getHeight(), true);
+                        clone.modify([&](juce::Graphics& g)
+                            {
+                                source.paintToContext(g, {});
+                            });
+
+                        return clone;
+                    };
+
+
+                auto polkaDotsCopy = copyTransientImage(polkaDotsTransientImage);
                 if (desaturateToggle.getToggleState())
                     polkaDotsCopy.desaturate();
                 if (multiplyAllAlphaToggle.getToggleState())
@@ -202,6 +236,9 @@ private:
                 // Draw the polka dots image to the screen
                 //
                 g.drawImageAt(polkaDotsImage, 0, 0);
+#endif
+
+                polkaDotsTransientImage.paintToContext(g, {});
             }
 
             paintTimeMsecStats.addValue(elapsedSeconds * 1000.0);
@@ -259,19 +296,16 @@ private:
             {
             case softwareImage:
             {
-                imagePermanence = juce::Image::Permanence::permanent;
                 imageType = std::make_unique<juce::SoftwareImageType>();
                 break;
             }
             case permanentNativeImage:
             {
-                imagePermanence = juce::Image::Permanence::permanent;
                 imageType = std::make_unique<juce::NativeImageType>();
                 break;
             }
             case disposableNativeImage:
             {
-                imagePermanence = juce::Image::Permanence::disposable;
                 imageType = std::make_unique<juce::NativeImageType>();
                 break;
             }
@@ -279,7 +313,8 @@ private:
 
             peer->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0);
 
-            polkaDotsImage = {};
+            polkaDotsLegacyImage = {};
+            polkaDotsTransientImage.reset();
 
             paintTimeMsecStats.reset();
 
@@ -290,9 +325,9 @@ private:
         double lastMsec = juce::Time::getMillisecondCounterHiRes();
         juce::dsp::Phase<double> angle;
 
-        juce::Image polkaDotsImage;
+        juce::Image polkaDotsLegacyImage;
+        juce::TransientImage polkaDotsTransientImage;
         std::unique_ptr<juce::ImageType> imageType = std::make_unique<juce::NativeImageType>();
-        juce::Image::Permanence imagePermanence = juce::Image::Permanence::disposable;
         juce::StatisticsAccumulator<double> paintTimeMsecStats;
         juce::DropShadowEffect dropShadowEffect;
         juce::GlowEffect glowEffect;
