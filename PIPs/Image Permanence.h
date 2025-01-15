@@ -27,8 +27,8 @@ public:
     enum
     {
         softwareImage = 1,
-        permanentNativeImage,
-        disposableNativeImage
+        nativeImageWithBackup,
+        nativeImageNoBackup
     };
 
     ImagePermanence()
@@ -87,11 +87,11 @@ private:
             setOpaque(false);
 
             modeCombo.addItem("Software image", softwareImage);
-            modeCombo.addItem("Permanent D2D images", permanentNativeImage);
-            modeCombo.addItem("Disposable D2D images", disposableNativeImage);
+            modeCombo.addItem("D2D images with backup", nativeImageWithBackup);
+            modeCombo.addItem("D2D images no backup", nativeImageNoBackup);
 
             addAndMakeVisible(modeCombo);
-            modeCombo.setSelectedId(disposableNativeImage, juce::dontSendNotification);
+            modeCombo.setSelectedId(softwareImage, juce::dontSendNotification);
             modeCombo.onChange = [this]
                 {
                     setImageType(modeCombo.getSelectedId());
@@ -134,15 +134,13 @@ private:
 
         void paintPolkaDots()
         {
-            polkaDotsLegacyImage = {};
-            polkaDotsTransientImage = {};
-
             std::function<void(juce::Graphics& g)> painter = [&](juce::Graphics& g)
                 {
                     juce::Random random;
 
                     auto r = getLocalBounds().toFloat();
-                    for (int i = 0; i < 100; ++i)
+                    auto area = getWidth() * getHeight();
+                    for (int i = 0; i < area / 5000; ++i)
                     {
                         g.setColour(juce::Colour::fromHSV(random.nextFloat(), 1.0f, 1.0f, 1.0f));
                         float size = random.nextFloat() * 100.0f;
@@ -153,30 +151,30 @@ private:
                     }
                 };
 
-            if (modeCombo.getSelectedId() == disposableNativeImage)
+            bool backupEnabled = modeCombo.getSelectedId() == nativeImageWithBackup;
+            if (polkaDotsSourceImage.getWidth() != getWidth() || polkaDotsSourceImage.getHeight() != getHeight())
             {
-                if (polkaDotsTransientImage.getWidth() != getWidth() || polkaDotsTransientImage.getHeight() != getHeight())
-                {
-                    polkaDotsTransientImage.setProperties(Image::ARGB, getWidth(), getHeight(), true);
-                    polkaDotsTransientImage.modify(painter);
-                }
+                polkaDotsSourceImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, *imageType };
+                if (auto extensions = polkaDotsSourceImage.getPixelData()->getBackupExtensions())
+                    extensions->setBackupEnabled(backupEnabled);
+
+                sourceX = 0;
+
+                juce::Graphics g{ polkaDotsSourceImage };
+                painter(g);
             }
-            else
+
+            if (outputImage.getWidth() != getWidth() || outputImage.getHeight() != getHeight())
             {
-                if (polkaDotsLegacyImage.getWidth() != getWidth() || polkaDotsLegacyImage.getHeight() != getHeight())
-                {
-                    polkaDotsLegacyImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, *imageType };
-                    juce::Graphics g{ polkaDotsLegacyImage };
-                    painter(g);
-                }
+                outputImage = juce::Image{ juce::Image::ARGB, getWidth(), getHeight(), true, *imageType };
+                if (auto extensions = outputImage.getPixelData()->getBackupExtensions())
+                    extensions->setBackupEnabled(backupEnabled);
             }
         }
 
         void paint(juce::Graphics& g) override
         {
             double elapsedSeconds = 0.0;
-            
-            //return;
 
             {
                 juce::ScopedTimeMeasurement stm{ elapsedSeconds };
@@ -186,59 +184,35 @@ private:
                 //
                 paintPolkaDots();
 
+                {
+                    juce::Graphics ig{ outputImage };
+                    ig.setOpacity(0.0f);
+                    ig.getInternalContext().fillRect(outputImage.getBounds(), true);
+                    ig.setOpacity(1.0f);
+                    ig.drawImageAt(polkaDotsSourceImage, 0, 0);
+                }
+
                 //
                 // Use Image::moveImageSection to animate the polka dots
                 //
-                /*
+                outputImage.moveImageSection(0, 0, sourceX, 0, outputImage.getWidth() - sourceX, outputImage.getHeight());
+
                 {
-                    auto clippedPolkaDotsImage = polkaDotsImage.getClippedImage({ 0, 0, 1, polkaDotsImage.getHeight() });
-                    clippedPolkaDotsImage = clippedPolkaDotsImage.createCopy();
-
-                    if (polkaDotsImage.isValid() && clippedPolkaDotsImage.isValid())
-                    {
-                        polkaDotsImage.moveImageSection(0, 0, 1, 0, polkaDotsImage.getWidth() - 1, polkaDotsImage.getHeight());
-
-                        {
-                            juce::Graphics imageG{ polkaDotsImage };
-                            imageG.setColour(juce::Colours::transparentBlack);
-                            imageG.getInternalContext().fillRect({ polkaDotsImage.getWidth() - 1, 0, 1, polkaDotsImage.getHeight() }, true);
-                            imageG.setColour(juce::Colours::black);
-                            imageG.drawImageAt(clippedPolkaDotsImage, polkaDotsImage.getWidth() - 1, 0);
-                        }
-                    }
+                    juce::Graphics ig{ outputImage };
+                    ig.setColour(juce::Colours::transparentBlack);
+                    ig.getInternalContext().fillRect({ outputImage.getWidth() - sourceX, 0, sourceX, outputImage.getHeight() }, true);
+                    ig.setOpacity(1.0f);
+                    ig.drawImageAt(polkaDotsSourceImage, outputImage.getWidth() - sourceX, 0);
                 }
-                */
 
-                //
-                // Apply effects to polka dots
-                //
-#if 0
-                auto copyTransientImage = [](const juce::TransientImage& source)
-                    {
-                        auto clone = juce::TransientImage{};
-                        clone.setProperties(Image::ARGB, source.getWidth(), source.getHeight(), true);
-                        clone.modify([&](juce::Graphics& g)
-                            {
-                                source.paintToContext(g, {});
-                            });
+                sourceX = (sourceX + 1) % polkaDotsSourceImage.getWidth();
 
-                        return clone;
-                    };
-
-
-                auto polkaDotsCopy = copyTransientImage(polkaDotsTransientImage);
                 if (desaturateToggle.getToggleState())
-                    polkaDotsCopy.desaturate();
+                    outputImage.desaturate();
                 if (multiplyAllAlphaToggle.getToggleState())
-                    polkaDotsCopy.multiplyAllAlphas(0.3f);
+                    outputImage.multiplyAllAlphas(0.3f);
 
-                //
-                // Draw the polka dots image to the screen
-                //
-                g.drawImageAt(polkaDotsImage, 0, 0);
-#endif
-
-                polkaDotsTransientImage.paintToContext(g, {});
+                g.drawImageAt(outputImage, 0, 0);
             }
 
             paintTimeMsecStats.addValue(elapsedSeconds * 1000.0);
@@ -247,7 +221,7 @@ private:
             g.fillRect(0, 0, getWidth(), 90);
             g.setColour(juce::Colours::white);
             g.setFont(g.getCurrentFont().withHeight(40.0f));
-            g.drawText("Average " + juce::String{paintTimeMsecStats.getAverage(), 1} + " msec/frame", getLocalBounds(), juce::Justification::topRight);
+            g.drawText("Average " + juce::String{ paintTimeMsecStats.getAverage(), 1 } + " msec/frame", getLocalBounds(), juce::Justification::topRight);
         }
 
         void resized() override
@@ -269,13 +243,13 @@ private:
                 auto now = juce::Time::getMillisecondCounterHiRes();
                 auto elapsedSeconds = (now - lastMsec) * 0.001;
                 lastMsec = now;
-                
-                angle.advance(elapsedSeconds* juce::MathConstants<double>::twoPi * 0.2);
+
+                angle.advance(elapsedSeconds * juce::MathConstants<double>::twoPi * 0.2);
 
                 repaint();
             } };
 
-        void parentHierarchyChanged() override 
+        void parentHierarchyChanged() override
         {
             if (auto peer = getPeer())
             {
@@ -299,12 +273,12 @@ private:
                 imageType = std::make_unique<juce::SoftwareImageType>();
                 break;
             }
-            case permanentNativeImage:
+            case nativeImageWithBackup:
             {
                 imageType = std::make_unique<juce::NativeImageType>();
                 break;
             }
-            case disposableNativeImage:
+            case nativeImageNoBackup:
             {
                 imageType = std::make_unique<juce::NativeImageType>();
                 break;
@@ -313,8 +287,8 @@ private:
 
             peer->setCurrentRenderingEngine(direct2DToggle.getToggleState() ? 1 : 0);
 
-            polkaDotsLegacyImage = {};
-            polkaDotsTransientImage.reset();
+            polkaDotsSourceImage = {};
+            outputImage = {};
 
             paintTimeMsecStats.reset();
 
@@ -325,8 +299,9 @@ private:
         double lastMsec = juce::Time::getMillisecondCounterHiRes();
         juce::dsp::Phase<double> angle;
 
-        juce::Image polkaDotsLegacyImage;
-        juce::TransientImage polkaDotsTransientImage;
+        juce::Image polkaDotsSourceImage;
+        int sourceX = 0;
+        juce::Image outputImage;
         std::unique_ptr<juce::ImageType> imageType = std::make_unique<juce::NativeImageType>();
         juce::StatisticsAccumulator<double> paintTimeMsecStats;
         juce::DropShadowEffect dropShadowEffect;
